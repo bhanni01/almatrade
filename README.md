@@ -1,36 +1,45 @@
-# NYSE Pair Trading Viewer
+# Research Pair Trading Viewer
 
-This is a lightweight browser app for exploring pair-trading candidates from NYSE price history.
+This app now uses the local research saved in `offlimit/` instead of Reddit or a
+generic NYSE scan.
 
-## What it does
+The current source is:
 
-- Filters stocks by latest price range.
-- Limits comparisons to `NYSE` rows.
-- Ranks pairs by a simple similarity score based on:
-  - normalized price correlation
-  - average normalized gap
-  - volatility spread
-- Lets you inspect the top pairs on a normalized price chart.
+- `offlimit/Pairs Trading Copula Vs Cointegration.html`
 
-## CSV format
+## What it shows
 
-Upload a CSV with these columns:
+- the core takeaway from the saved QuantConnect article
+- the two compared methods: copula and cointegration
+- the ETF pair universe used in the research
+- detail cards for each curated ETF pair
 
-```csv
-date,ticker,exchange,close
-2026-01-02,KO,NYSE,61.42
-2026-01-02,PEP,NYSE,181.55
-```
+The pair universe extracted from the saved article includes:
 
-Requirements:
-
-- one row per ticker per trading day
-- `date` in `YYYY-MM-DD`
-- `exchange` should be `NYSE` for rows you want included
-- enough history for the chosen lookback window
+- `QQQ / XLK`
+- `XME / EWG`
+- `TNA / TLT`
+- `FAS / FAZ`
+- `XLF / XLU`
+- `EWC / EWA`
+- `QLD / QID`
 
 ## Run
 
 Open [index.html](/Users/nis/Desktop/coding/pair_trading/index.html) in a browser.
 
-If you want live or larger-scale market data later, the next step is adding a backend that pulls NYSE history from a real provider and then replacing the sample dataset / CSV upload flow.
+If you want to serve it locally:
+
+```bash
+cd /Users/nis/Desktop/coding/pair_trading
+python3 -m http.server 8000
+```
+
+Then visit `http://localhost:8000`.
+
+## Notes
+
+- This viewer is a research digest, not a live trading engine.
+- The saved article says the copula-based approach outperformed the cointegration
+  benchmark in the tested setup.
+- `offlimit/` is now ignored by git so the saved research assets stay local.
