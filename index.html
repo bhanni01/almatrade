@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NYSE Pair Trading Viewer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Behavior-driven pair discovery</p>
+          <h1>NYSE Pair Trading Viewer</h1>
+          <p class="hero-text">
+            Filter stocks by current price, rank the closest behaving pairs, and
+            inspect normalized price action before you decide what deserves a
+            deeper statistical test.
+          </p>
+        </div>
+        <div class="hero-card">
+          <div class="stat">
+            <span class="stat-label">Universe</span>
+            <strong id="statUniverse">0 stocks</strong>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Eligible</span>
+            <strong id="statEligible">0 stocks</strong>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Pairs</span>
+            <strong id="statPairs">0 results</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="controls">
+        <div class="control-card">
+          <label for="minPrice">Minimum price</label>
+          <input id="minPrice" type="range" min="5" max="300" step="1" value="20" />
+          <div class="range-value" id="minPriceValue">$20</div>
+        </div>
+        <div class="control-card">
+          <label for="maxPrice">Maximum price</label>
+          <input id="maxPrice" type="range" min="5" max="300" step="1" value="120" />
+          <div class="range-value" id="maxPriceValue">$120</div>
+        </div>
+        <div class="control-card">
+          <label for="lookbackDays">Lookback window</label>
+          <input id="lookbackDays" type="range" min="30" max="180" step="5" value="90" />
+          <div class="range-value" id="lookbackValue">90 trading days</div>
+        </div>
+        <div class="control-card">
+          <label for="topPairs">Top matches</label>
+          <input id="topPairs" type="range" min="3" max="20" step="1" value="8" />
+          <div class="range-value" id="topPairsValue">8 pairs</div>
+        </div>
+        <div class="control-card file-card">
+          <label for="csvInput">Upload CSV</label>
+          <input id="csvInput" type="file" accept=".csv" />
+          <p class="hint">
+            Columns: <code>date,ticker,exchange,close</code>
+          </p>
+        </div>
+        <button id="resetButton" class="ghost-button" type="button">
+          Use built-in sample data
+        </button>
+      </section>
+
+      <section class="content-grid">
+        <article class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-kicker">Ranked candidates</p>
+              <h2>Closest NYSE pairs</h2>
+            </div>
+            <p class="panel-note">
+              Ranked by strong correlation, low normalized gap, and similar
+              volatility.
+            </p>
+          </div>
+          <div id="pairList" class="pair-list"></div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-kicker">Visual comparison</p>
+              <h2 id="chartTitle">Select a pair</h2>
+            </div>
+            <p id="chartSummary" class="panel-note">
+              Pick a ranked result to compare normalized closing prices.
+            </p>
+          </div>
+          <div class="chart-card">
+            <canvas id="pairChart" width="860" height="420"></canvas>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
