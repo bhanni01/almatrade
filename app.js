@@ -180,6 +180,13 @@ const elements = {
   relationExplanation: document.querySelector("#relationExplanation"),
   confidence: document.querySelector("#confidence"),
   timePeriod: document.querySelector("#timePeriod"),
+  distortionSlider: document.querySelector("#distortionSlider"),
+  distortionValue: document.querySelector("#distortionValue"),
+  tensionFill: document.querySelector("#tensionFill"),
+  reversionOdds: document.querySelector("#reversionOdds"),
+  breakoutRisk: document.querySelector("#breakoutRisk"),
+  payoutSkew: document.querySelector("#payoutSkew"),
+  shockNarrative: document.querySelector("#shockNarrative"),
   stockAName: document.querySelector("#stockAName"),
   stockADirection: document.querySelector("#stockADirection"),
   stockAEntry: document.querySelector("#stockAEntry"),
@@ -243,6 +250,8 @@ function renderSignal() {
     elements.stockBTime,
     elements.stockBSummary
   );
+
+  renderDistortion();
 }
 
 function renderStockCard(stock, nameEl, directionEl, entryEl, targetEl, exitEl, timeEl, summaryEl) {
@@ -255,6 +264,32 @@ function renderStockCard(stock, nameEl, directionEl, entryEl, targetEl, exitEl, 
   timeEl.textContent = PAIR_SIGNALS[state.activeIndex].timePeriod;
   summaryEl.textContent = stock.summary;
 }
+
+function renderDistortion() {
+  const signal = PAIR_SIGNALS[state.activeIndex];
+  const distortion = Number(elements.distortionSlider.value);
+  const pressure = Math.abs(distortion);
+  const reversionOdds = Math.max(18, Math.min(92, 52 + pressure * 4));
+  const breakoutRisk = Math.max(8, Math.min(78, 14 + pressure * 3));
+  const payoutSkew = (pressure * 1.4 + (signal.confidence === "High" ? 2.8 : signal.confidence === "Medium" ? 1.3 : -0.7)).toFixed(1);
+  const leadingTicker = distortion >= 0 ? signal.stockA.ticker : signal.stockB.ticker;
+  const laggingTicker = distortion >= 0 ? signal.stockB.ticker : signal.stockA.ticker;
+
+  elements.distortionValue.textContent =
+    distortion === 0 ? "Neutral" : `${distortion > 0 ? "+" : ""}${distortion} sigma stretch`;
+  elements.tensionFill.style.width = `${((distortion + 10) / 20) * 100}%`;
+  elements.reversionOdds.textContent = `${reversionOdds}%`;
+  elements.breakoutRisk.textContent = `${breakoutRisk}%`;
+  elements.payoutSkew.textContent = `${payoutSkew}x`;
+  elements.shockNarrative.textContent =
+    distortion === 0
+      ? `The pair is sitting near its center. No side is screaming for a fade here.`
+      : `${leadingTicker} is being treated as the stretched leg and ${laggingTicker} as the catch-up leg. At this distortion, the setup favors a snap-back trade, but breakout risk rises fast once the stretch stays elevated.`;
+}
+
+elements.distortionSlider.addEventListener("input", () => {
+  renderDistortion();
+});
 
 renderTabs();
 renderSignal();

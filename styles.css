@@ -145,6 +145,90 @@ h1 {
   line-height: 1.8;
 }
 
+.distortion-lab {
+  margin-top: 22px;
+  padding: 18px;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at right top, rgba(20, 122, 85, 0.1), transparent 35%),
+    linear-gradient(135deg, rgba(24, 21, 17, 0.03), rgba(255, 255, 255, 0.9));
+  border: 1px solid var(--line);
+}
+
+.lab-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.lab-head h3 {
+  margin-top: 2px;
+  font-size: 1.25rem;
+}
+
+.distortion-value {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.88rem;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(24, 21, 17, 0.06);
+}
+
+.distortion-slider {
+  width: 100%;
+  margin-top: 18px;
+  accent-color: var(--down);
+}
+
+.tension-bar {
+  height: 14px;
+  margin-top: 12px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(20, 122, 85, 0.2), rgba(194, 86, 45, 0.2));
+  overflow: hidden;
+}
+
+.tension-fill {
+  height: 100%;
+  width: 50%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--up), var(--down));
+  transition: width 120ms ease;
+}
+
+.lab-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.lab-metric {
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--line);
+}
+
+.lab-metric span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.lab-metric strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 1.3rem;
+}
+
+.shock-narrative {
+  margin-top: 16px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
 .signal-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -207,5 +291,9 @@ h1 {
 
   .relation-head {
     flex-direction: column;
+  }
+
+  .lab-grid {
+    grid-template-columns: 1fr;
   }
 }

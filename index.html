@@ -38,6 +38,39 @@
         </div>
         <p id="relationText" class="relation-text"></p>
         <p id="relationExplanation" class="relation-explanation"></p>
+
+        <div class="distortion-lab">
+          <div class="lab-head">
+            <div>
+              <p class="section-label">Distortion Engine</p>
+              <h3>Pull the pair out of balance</h3>
+            </div>
+            <strong id="distortionValue" class="distortion-value"></strong>
+          </div>
+
+          <input id="distortionSlider" class="distortion-slider" type="range" min="-10" max="10" step="1" value="0" />
+
+          <div class="tension-bar">
+            <div id="tensionFill" class="tension-fill"></div>
+          </div>
+
+          <div class="lab-grid">
+            <div class="lab-metric">
+              <span>Mean reversion odds</span>
+              <strong id="reversionOdds"></strong>
+            </div>
+            <div class="lab-metric">
+              <span>Breakout risk</span>
+              <strong id="breakoutRisk"></strong>
+            </div>
+            <div class="lab-metric">
+              <span>Payout skew</span>
+              <strong id="payoutSkew"></strong>
+            </div>
+          </div>
+
+          <p id="shockNarrative" class="shock-narrative"></p>
+        </div>
       </section>
 
       <section class="signal-grid">
