@@ -1,45 +1,29 @@
-# Research Pair Trading Viewer
+# Pair Strategy Lab
 
-This app now uses the local research saved in `offlimit/` instead of Reddit or a
-generic NYSE scan.
+This project is now a portfolio-oriented ETF pair strategy viewer.
 
-The current source is:
+## What changed
 
-- `offlimit/Pairs Trading Copula Vs Cointegration.html`
-
-## What it shows
-
-- the core takeaway from the saved QuantConnect article
-- the two compared methods: copula and cointegration
-- the ETF pair universe used in the research
-- detail cards for each curated ETF pair
-
-The pair universe extracted from the saved article includes:
-
-- `QQQ / XLK`
-- `XME / EWG`
-- `TNA / TLT`
-- `FAS / FAZ`
-- `XLF / XLU`
-- `EWC / EWA`
-- `QLD / QID`
+- Added a strategy lab layout with capital and risk controls.
+- Added confidence and horizon filters for pair discovery.
+- Added pair selection controls and a live allocated trade book table.
+- Added portfolio-level metrics: selected count, deployed risk, expected P/L, and average confidence.
+- Kept the original pair relationship and distortion engine, and wired distortion into allocation weighting.
 
 ## Run
 
 Open [index.html](/Users/nis/Desktop/coding/pair_trading/index.html) in a browser.
 
-If you want to serve it locally:
+Or use the local server:
 
 ```bash
 cd /Users/nis/Desktop/coding/pair_trading
-python3 -m http.server 8000
+npm start
 ```
 
-Then visit `http://localhost:8000`.
+Then visit `http://127.0.0.1:3000`.
 
 ## Notes
 
-- This viewer is a research digest, not a live trading engine.
-- The saved article says the copula-based approach outperformed the cointegration
-  benchmark in the tested setup.
-- `offlimit/` is now ignored by git so the saved research assets stay local.
+- This remains a research UI, not an execution engine.
+- Risk and expected P/L values are model-driven approximations for planning.

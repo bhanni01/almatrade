@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Stock Relation Viewer</title>
+    <title>Pair Strategy Lab</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -15,12 +15,68 @@
   <body>
     <main class="shell">
       <section class="hero">
-        <p class="eyebrow">Simple pair signal</p>
-        <h1>Stock Relation Viewer</h1>
+        <p class="eyebrow">Research pair signal + allocator</p>
+        <h1>Pair Strategy Lab</h1>
         <p class="intro">
-          Pick a research pair and get a plain-language read on which side looks
-          stronger, which side looks weaker, and the target price for each side.
+          Explore the saved ETF pair signals, stress them with distortion,
+          then allocate a portfolio-level risk budget across your selected trades.
         </p>
+      </section>
+
+      <section class="config-grid">
+        <article class="config-card">
+          <p class="section-label">Portfolio Inputs</p>
+          <div class="field-grid">
+            <label class="field">
+              <span>Total capital ($)</span>
+              <input id="capitalInput" type="number" min="1000" step="1000" value="100000" />
+            </label>
+            <label class="field">
+              <span>Max risk per trade (%)</span>
+              <input id="riskInput" type="number" min="1" max="20" step="0.5" value="5" />
+            </label>
+            <label class="field">
+              <span>Confidence filter</span>
+              <select id="confidenceFilter">
+                <option value="All">All</option>
+                <option value="High">High</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Horizon preference</span>
+              <select id="horizonFilter">
+                <option value="All">All</option>
+                <option value="Short">Short (<= 2 weeks)</option>
+                <option value="Medium">Medium (2 to 4 weeks)</option>
+                <option value="Long">Long (> 4 weeks)</option>
+              </select>
+            </label>
+          </div>
+        </article>
+
+        <article class="summary-card">
+          <p class="section-label">Portfolio Snapshot</p>
+          <div class="snapshot-grid">
+            <div>
+              <span>Selected pairs</span>
+              <strong id="selectedCount"></strong>
+            </div>
+            <div>
+              <span>Risk deployed</span>
+              <strong id="riskDeployed"></strong>
+            </div>
+            <div>
+              <span>Expected P/L</span>
+              <strong id="expectedPnL"></strong>
+            </div>
+            <div>
+              <span>Average confidence</span>
+              <strong id="avgConfidence"></strong>
+            </div>
+          </div>
+        </article>
       </section>
 
       <section id="pairTabs" class="pair-tabs"></section>
@@ -125,6 +181,31 @@
           </div>
           <p id="stockBSummary" class="signal-summary"></p>
         </article>
+      </section>
+
+      <section class="portfolio-card">
+        <div class="portfolio-head">
+          <div>
+            <p class="section-label">Selected Pair Book</p>
+            <h3>Allocated trade plan</h3>
+          </div>
+          <button id="toggleCurrentPair" class="toggle-button" type="button"></button>
+        </div>
+        <div class="table-wrap">
+          <table class="book-table">
+            <thead>
+              <tr>
+                <th>Pair</th>
+                <th>Confidence</th>
+                <th>Horizon</th>
+                <th>Weight</th>
+                <th>Allocation</th>
+                <th>Expected P/L</th>
+              </tr>
+            </thead>
+            <tbody id="allocationRows"></tbody>
+          </table>
+        </div>
       </section>
     </main>
 

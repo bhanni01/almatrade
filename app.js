@@ -169,8 +169,19 @@ const PAIR_SIGNALS = [
   },
 ];
 
+const CONFIDENCE_SCORE = {
+  High: 3,
+  Medium: 2,
+  Low: 1,
+};
+
 const state = {
   activeIndex: 0,
+  selectedPairs: new Set([0, 1, 5]),
+  filters: {
+    confidence: "All",
+    horizon: "All",
+  },
 };
 
 const elements = {
@@ -201,29 +212,118 @@ const elements = {
   stockBExit: document.querySelector("#stockBExit"),
   stockBTime: document.querySelector("#stockBTime"),
   stockBSummary: document.querySelector("#stockBSummary"),
+  capitalInput: document.querySelector("#capitalInput"),
+  riskInput: document.querySelector("#riskInput"),
+  confidenceFilter: document.querySelector("#confidenceFilter"),
+  horizonFilter: document.querySelector("#horizonFilter"),
+  selectedCount: document.querySelector("#selectedCount"),
+  riskDeployed: document.querySelector("#riskDeployed"),
+  expectedPnL: document.querySelector("#expectedPnL"),
+  avgConfidence: document.querySelector("#avgConfidence"),
+  allocationRows: document.querySelector("#allocationRows"),
+  toggleCurrentPair: document.querySelector("#toggleCurrentPair"),
 };
 
+function parseDollar(value) {
+  return Number(String(value).replace(/[$,]/g, ""));
+}
+
+function getTimeBucket(timePeriod) {
+  if (timePeriod.includes("trading days") || timePeriod.includes("1 to 2 weeks")) {
+    return "Short";
+  }
+  if (timePeriod.includes("2 to 4 weeks") || timePeriod.includes("1 to 3 weeks")) {
+    return "Medium";
+  }
+  return "Long";
+}
+
+function getFilteredIndices() {
+  return PAIR_SIGNALS.map((_, index) => index).filter((index) => {
+    const signal = PAIR_SIGNALS[index];
+    if (state.filters.confidence !== "All" && signal.confidence !== state.filters.confidence) {
+      return false;
+    }
+
+    const bucket = getTimeBucket(signal.timePeriod);
+    if (state.filters.horizon !== "All" && bucket !== state.filters.horizon) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
+function getPairDistortionBias(index) {
+  if (index === state.activeIndex) {
+    return Number(elements.distortionSlider.value) / 10;
+  }
+  return 0;
+}
+
+function getPairExpectedReturn(index) {
+  const signal = PAIR_SIGNALS[index];
+  const sideAReturn = Math.abs((parseDollar(signal.stockA.targetPrice) - parseDollar(signal.stockA.entryPrice)) / parseDollar(signal.stockA.entryPrice));
+  const sideBReturn = Math.abs((parseDollar(signal.stockB.targetPrice) - parseDollar(signal.stockB.entryPrice)) / parseDollar(signal.stockB.entryPrice));
+  const base = (sideAReturn + sideBReturn) / 2;
+  const confidenceBoost = 1 + CONFIDENCE_SCORE[signal.confidence] * 0.08;
+  const distortionBoost = 1 + Math.abs(getPairDistortionBias(index)) * 0.2;
+  return base * confidenceBoost * distortionBoost;
+}
+
+function getPairWeight(index) {
+  const signal = PAIR_SIGNALS[index];
+  const confidenceWeight = CONFIDENCE_SCORE[signal.confidence];
+  const horizon = getTimeBucket(signal.timePeriod);
+  const horizonPenalty = horizon === "Short" ? 0.8 : horizon === "Medium" ? 1 : 0.9;
+  const distortionEdge = index === state.activeIndex ? 1 + Math.abs(getPairDistortionBias(index)) * 0.35 : 1;
+  return confidenceWeight * horizonPenalty * distortionEdge;
+}
+
+function formatMoney(value) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
 function renderTabs() {
-  elements.pairTabs.innerHTML = PAIR_SIGNALS.map((entry, index) => {
-    const active = index === state.activeIndex ? "is-active" : "";
-    return `
-      <button class="pair-tab ${active}" type="button" data-index="${index}">
-        ${entry.pair[0]} / ${entry.pair[1]}
-      </button>
-    `;
-  }).join("");
+  const filtered = getFilteredIndices();
+
+  if (!filtered.includes(state.activeIndex)) {
+    state.activeIndex = filtered.length ? filtered[0] : 0;
+  }
+
+  elements.pairTabs.innerHTML = filtered.length
+    ? filtered
+        .map((index) => {
+          const entry = PAIR_SIGNALS[index];
+          const active = index === state.activeIndex ? "is-active" : "";
+          const selected = state.selectedPairs.has(index) ? "is-selected" : "";
+          return `
+            <button class="pair-tab ${active} ${selected}" type="button" data-index="${index}">
+              ${entry.pair[0]} / ${entry.pair[1]}
+            </button>
+          `;
+        })
+        .join("")
+    : '<p class="empty-note">No pairs match current filters.</p>';
 
   elements.pairTabs.querySelectorAll(".pair-tab").forEach((button) => {
     button.addEventListener("click", () => {
       state.activeIndex = Number(button.dataset.index);
-      renderTabs();
-      renderSignal();
+      renderAll();
     });
   });
 }
 
 function renderSignal() {
   const signal = PAIR_SIGNALS[state.activeIndex];
+  if (!signal) {
+    return;
+  }
+
   elements.relationTitle.textContent = `${signal.pair[0]} and ${signal.pair[1]}`;
   elements.relationText.textContent = signal.relation;
   elements.relationExplanation.textContent = signal.explanation;
@@ -250,8 +350,6 @@ function renderSignal() {
     elements.stockBTime,
     elements.stockBSummary
   );
-
-  renderDistortion();
 }
 
 function renderStockCard(stock, nameEl, directionEl, entryEl, targetEl, exitEl, timeEl, summaryEl) {
@@ -271,7 +369,10 @@ function renderDistortion() {
   const pressure = Math.abs(distortion);
   const reversionOdds = Math.max(18, Math.min(92, 52 + pressure * 4));
   const breakoutRisk = Math.max(8, Math.min(78, 14 + pressure * 3));
-  const payoutSkew = (pressure * 1.4 + (signal.confidence === "High" ? 2.8 : signal.confidence === "Medium" ? 1.3 : -0.7)).toFixed(1);
+  const payoutSkew = (
+    pressure * 1.4 +
+    (signal.confidence === "High" ? 2.8 : signal.confidence === "Medium" ? 1.3 : -0.7)
+  ).toFixed(1);
   const leadingTicker = distortion >= 0 ? signal.stockA.ticker : signal.stockB.ticker;
   const laggingTicker = distortion >= 0 ? signal.stockB.ticker : signal.stockA.ticker;
 
@@ -283,13 +384,120 @@ function renderDistortion() {
   elements.payoutSkew.textContent = `${payoutSkew}x`;
   elements.shockNarrative.textContent =
     distortion === 0
-      ? `The pair is sitting near its center. No side is screaming for a fade here.`
+      ? "The pair is sitting near its center. No side is screaming for a fade here."
       : `${leadingTicker} is being treated as the stretched leg and ${laggingTicker} as the catch-up leg. At this distortion, the setup favors a snap-back trade, but breakout risk rises fast once the stretch stays elevated.`;
 }
 
-elements.distortionSlider.addEventListener("input", () => {
+function renderSelectionToggle() {
+  const signal = PAIR_SIGNALS[state.activeIndex];
+  const pairLabel = `${signal.pair[0]} / ${signal.pair[1]}`;
+  const isSelected = state.selectedPairs.has(state.activeIndex);
+  elements.toggleCurrentPair.textContent = isSelected
+    ? `Remove ${pairLabel}`
+    : `Add ${pairLabel}`;
+  elements.toggleCurrentPair.dataset.mode = isSelected ? "remove" : "add";
+}
+
+function renderPortfolio() {
+  const selectedFiltered = getFilteredIndices().filter((index) => state.selectedPairs.has(index));
+  const capital = Math.max(1000, Number(elements.capitalInput.value) || 100000);
+  const riskPct = Math.max(1, Number(elements.riskInput.value) || 5) / 100;
+  const maxRiskDollars = capital * riskPct;
+
+  if (!selectedFiltered.length) {
+    elements.allocationRows.innerHTML = `
+      <tr>
+        <td colspan="6" class="empty-note">No selected pairs in current filter scope.</td>
+      </tr>
+    `;
+    elements.selectedCount.textContent = "0";
+    elements.riskDeployed.textContent = formatMoney(0);
+    elements.expectedPnL.textContent = formatMoney(0);
+    elements.avgConfidence.textContent = "-";
+    return;
+  }
+
+  const weights = selectedFiltered.map((index) => ({
+    index,
+    weight: getPairWeight(index),
+    expectedReturn: getPairExpectedReturn(index),
+  }));
+  const totalWeight = weights.reduce((sum, row) => sum + row.weight, 0);
+
+  let totalRisk = 0;
+  let totalExpectedPnL = 0;
+  let totalConfidenceScore = 0;
+
+  elements.allocationRows.innerHTML = weights
+    .sort((a, b) => b.weight - a.weight)
+    .map((row) => {
+      const signal = PAIR_SIGNALS[row.index];
+      const pairLabel = `${signal.pair[0]} / ${signal.pair[1]}`;
+      const allocation = totalWeight > 0 ? (maxRiskDollars * row.weight) / totalWeight : 0;
+      const expectedPnL = allocation * row.expectedReturn;
+      const weightPct = totalWeight > 0 ? (row.weight / totalWeight) * 100 : 0;
+
+      totalRisk += allocation;
+      totalExpectedPnL += expectedPnL;
+      totalConfidenceScore += CONFIDENCE_SCORE[signal.confidence];
+
+      return `
+        <tr>
+          <td>${pairLabel}</td>
+          <td>${signal.confidence}</td>
+          <td>${signal.timePeriod}</td>
+          <td>${weightPct.toFixed(1)}%</td>
+          <td>${formatMoney(allocation)}</td>
+          <td>${formatMoney(expectedPnL)}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  elements.selectedCount.textContent = String(selectedFiltered.length);
+  elements.riskDeployed.textContent = formatMoney(totalRisk);
+  elements.expectedPnL.textContent = formatMoney(totalExpectedPnL);
+
+  const averageConfidence = totalConfidenceScore / selectedFiltered.length;
+  const confidenceLabel = averageConfidence >= 2.6 ? "High" : averageConfidence >= 1.7 ? "Medium" : "Low";
+  elements.avgConfidence.textContent = confidenceLabel;
+}
+
+function renderAll() {
+  renderTabs();
+  renderSignal();
   renderDistortion();
+  renderSelectionToggle();
+  renderPortfolio();
+}
+
+elements.distortionSlider.addEventListener("input", () => {
+  renderAll();
 });
 
-renderTabs();
-renderSignal();
+elements.toggleCurrentPair.addEventListener("click", () => {
+  if (state.selectedPairs.has(state.activeIndex)) {
+    state.selectedPairs.delete(state.activeIndex);
+  } else {
+    state.selectedPairs.add(state.activeIndex);
+  }
+  renderAll();
+});
+
+elements.confidenceFilter.addEventListener("change", () => {
+  state.filters.confidence = elements.confidenceFilter.value;
+  renderAll();
+});
+
+elements.horizonFilter.addEventListener("change", () => {
+  state.filters.horizon = elements.horizonFilter.value;
+  renderAll();
+});
+
+[elements.capitalInput, elements.riskInput].forEach((input) => {
+  input.addEventListener("input", () => {
+    renderPortfolio();
+  });
+});
+
+renderAll();

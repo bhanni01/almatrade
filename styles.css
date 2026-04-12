@@ -27,14 +27,17 @@ body {
 }
 
 .shell {
-  width: min(980px, calc(100% - 32px));
+  width: min(1040px, calc(100% - 32px));
   margin: 0 auto;
   padding: 40px 0 56px;
 }
 
 .hero,
+.config-card,
+.summary-card,
 .relation-card,
-.signal-card {
+.signal-card,
+.portfolio-card {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 28px;
@@ -48,7 +51,11 @@ body {
 .eyebrow,
 .section-label,
 .confidence-pill,
-.pair-tab {
+.pair-tab,
+.toggle-button,
+input,
+select,
+th {
   font-family: "IBM Plex Mono", monospace;
 }
 
@@ -71,14 +78,78 @@ p {
 h1 {
   font-size: clamp(2.3rem, 6vw, 4.5rem);
   line-height: 0.95;
-  max-width: 10ch;
+  max-width: 11ch;
 }
 
 .intro {
   margin-top: 16px;
-  max-width: 56ch;
+  max-width: 60ch;
   color: var(--muted);
   line-height: 1.7;
+}
+
+.config-grid {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 18px;
+}
+
+.config-card,
+.summary-card,
+.portfolio-card {
+  padding: 22px;
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field span {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+input,
+select {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #fff;
+  color: var(--ink);
+}
+
+.snapshot-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.snapshot-grid div {
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.snapshot-grid span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.snapshot-grid strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 1.25rem;
 }
 
 .pair-tabs {
@@ -103,6 +174,11 @@ h1 {
   transform: translateY(-1px);
   background: white;
   border-color: rgba(20, 122, 85, 0.28);
+}
+
+.pair-tab.is-selected {
+  border-color: rgba(20, 122, 85, 0.42);
+  box-shadow: inset 0 0 0 1px rgba(20, 122, 85, 0.35);
 }
 
 .relation-card {
@@ -284,16 +360,84 @@ h1 {
   line-height: 1.7;
 }
 
-@media (max-width: 760px) {
+.portfolio-card {
+  margin-top: 18px;
+}
+
+.portfolio-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+}
+
+.portfolio-head h3 {
+  font-size: 1.3rem;
+}
+
+.toggle-button {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 10px 14px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.toggle-button[data-mode="add"] {
+  border-color: rgba(20, 122, 85, 0.45);
+}
+
+.toggle-button[data-mode="remove"] {
+  border-color: rgba(194, 86, 45, 0.45);
+}
+
+.table-wrap {
+  margin-top: 16px;
+  overflow-x: auto;
+}
+
+.book-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 740px;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+th {
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.empty-note {
+  color: var(--muted);
+  padding: 8px 0;
+}
+
+@media (max-width: 900px) {
+  .config-grid,
   .signal-grid {
     grid-template-columns: 1fr;
   }
 
-  .relation-head {
-    flex-direction: column;
-  }
-
+  .field-grid,
+  .snapshot-grid,
   .lab-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .relation-head,
+  .portfolio-head {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
