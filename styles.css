@@ -37,6 +37,7 @@ body {
 .summary-card,
 .relation-card,
 .signal-card,
+.execution-card,
 .portfolio-card {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -360,6 +361,137 @@ select {
   line-height: 1.7;
 }
 
+.execution-card {
+  margin-top: 18px;
+  padding: 24px;
+}
+
+.execution-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.execution-head h3 {
+  font-size: 1.3rem;
+}
+
+.planner-status,
+.leg-side {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.82rem;
+  padding: 8px 12px;
+  border-radius: 999px;
+}
+
+.planner-status {
+  background: rgba(24, 21, 17, 0.06);
+}
+
+.planner-status[data-mode="live"] {
+  color: var(--up);
+  background: rgba(20, 122, 85, 0.12);
+}
+
+.planner-status[data-mode="preview"] {
+  color: var(--down);
+  background: rgba(194, 86, 45, 0.12);
+}
+
+.execution-summary {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.execution-summary div,
+.ticket-leg,
+.planner-notes {
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.execution-summary div {
+  padding: 14px;
+}
+
+.execution-summary span,
+.leg-row span,
+.planner-notes li {
+  color: var(--muted);
+}
+
+.execution-summary strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 1.2rem;
+}
+
+.execution-grid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.ticket-leg {
+  padding: 18px;
+}
+
+.leg-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.leg-head h4 {
+  margin-top: 2px;
+  font-size: 1.55rem;
+}
+
+.leg-side[data-direction="long"] {
+  color: var(--up);
+  background: var(--up-soft);
+}
+
+.leg-side[data-direction="short"] {
+  color: var(--down);
+  background: var(--down-soft);
+}
+
+.leg-table {
+  margin-top: 14px;
+}
+
+.leg-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.leg-row strong {
+  font-size: 1.02rem;
+}
+
+.planner-notes {
+  margin-top: 16px;
+  padding: 18px;
+}
+
+.checklist {
+  margin: 14px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 10px;
+}
+
 .portfolio-card {
   margin-top: 18px;
 }
@@ -423,20 +555,24 @@ th {
 
 @media (max-width: 900px) {
   .config-grid,
-  .signal-grid {
+  .signal-grid,
+  .execution-grid {
     grid-template-columns: 1fr;
   }
 
   .field-grid,
   .snapshot-grid,
-  .lab-grid {
+  .lab-grid,
+  .execution-summary {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 760px) {
   .relation-head,
-  .portfolio-head {
+  .portfolio-head,
+  .execution-head,
+  .leg-head {
     flex-direction: column;
     align-items: flex-start;
   }

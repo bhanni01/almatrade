@@ -53,6 +53,18 @@
                 <option value="Long">Long (> 4 weeks)</option>
               </select>
             </label>
+            <label class="field">
+              <span>Ticket sizing</span>
+              <select id="sizingMode">
+                <option value="balanced">Balanced</option>
+                <option value="conviction">Conviction weighted</option>
+                <option value="volatility">Volatility adjusted</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Stop budget (% of gross exposure)</span>
+              <input id="stopBudgetInput" type="number" min="0.5" max="10" step="0.1" value="2.2" />
+            </label>
           </div>
         </article>
 
@@ -183,6 +195,114 @@
         </article>
       </section>
 
+      <section class="execution-card">
+        <div class="execution-head">
+          <div>
+            <p class="section-label">Execution Planner</p>
+            <h3 id="ticketTitle">Active pair ticket</h3>
+          </div>
+          <span id="ticketStatus" class="planner-status"></span>
+        </div>
+
+        <div class="execution-summary">
+          <div>
+            <span>Risk budget</span>
+            <strong id="planRiskBudget"></strong>
+          </div>
+          <div>
+            <span>Gross exposure</span>
+            <strong id="planGrossExposure"></strong>
+          </div>
+          <div>
+            <span>Expected reward</span>
+            <strong id="planExpectedReward"></strong>
+          </div>
+          <div>
+            <span>Reward / risk</span>
+            <strong id="planRewardRisk"></strong>
+          </div>
+          <div>
+            <span>Max hold</span>
+            <strong id="planMaxHold"></strong>
+          </div>
+          <div>
+            <span>Hedge split</span>
+            <strong id="planHedgeSplit"></strong>
+          </div>
+        </div>
+
+        <div class="execution-grid">
+          <article class="ticket-leg">
+            <div class="leg-head">
+              <div>
+                <p class="section-label">Leg One</p>
+                <h4 id="legATicker"></h4>
+              </div>
+              <span id="legAAction" class="leg-side"></span>
+            </div>
+            <div class="leg-table">
+              <div class="leg-row">
+                <span>Entry</span>
+                <strong id="legAEntry"></strong>
+              </div>
+              <div class="leg-row">
+                <span>Target</span>
+                <strong id="legATarget"></strong>
+              </div>
+              <div class="leg-row">
+                <span>Stop</span>
+                <strong id="legAStop"></strong>
+              </div>
+              <div class="leg-row">
+                <span>Shares</span>
+                <strong id="legAShares"></strong>
+              </div>
+              <div class="leg-row">
+                <span>Gross notional</span>
+                <strong id="legANotional"></strong>
+              </div>
+            </div>
+          </article>
+
+          <article class="ticket-leg">
+            <div class="leg-head">
+              <div>
+                <p class="section-label">Leg Two</p>
+                <h4 id="legBTicker"></h4>
+              </div>
+              <span id="legBAction" class="leg-side"></span>
+            </div>
+            <div class="leg-table">
+              <div class="leg-row">
+                <span>Entry</span>
+                <strong id="legBEntry"></strong>
+              </div>
+              <div class="leg-row">
+                <span>Target</span>
+                <strong id="legBTarget"></strong>
+              </div>
+              <div class="leg-row">
+                <span>Stop</span>
+                <strong id="legBStop"></strong>
+              </div>
+              <div class="leg-row">
+                <span>Shares</span>
+                <strong id="legBShares"></strong>
+              </div>
+              <div class="leg-row">
+                <span>Gross notional</span>
+                <strong id="legBNotional"></strong>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <div class="planner-notes">
+          <p id="planNarrative" class="shock-narrative"></p>
+          <ul id="planChecklist" class="checklist"></ul>
+        </div>
+      </section>
+
       <section class="portfolio-card">
         <div class="portfolio-head">
           <div>
@@ -199,7 +319,7 @@
                 <th>Confidence</th>
                 <th>Horizon</th>
                 <th>Weight</th>
-                <th>Allocation</th>
+                <th>Risk Budget</th>
                 <th>Expected P/L</th>
               </tr>
             </thead>

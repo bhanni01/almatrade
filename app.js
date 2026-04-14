@@ -175,6 +175,8 @@ const CONFIDENCE_SCORE = {
   Low: 1,
 };
 
+const STORAGE_KEY = "pair-strategy-lab-state";
+
 const state = {
   activeIndex: 0,
   selectedPairs: new Set([0, 1, 5]),
@@ -216,16 +218,68 @@ const elements = {
   riskInput: document.querySelector("#riskInput"),
   confidenceFilter: document.querySelector("#confidenceFilter"),
   horizonFilter: document.querySelector("#horizonFilter"),
+  sizingMode: document.querySelector("#sizingMode"),
+  stopBudgetInput: document.querySelector("#stopBudgetInput"),
   selectedCount: document.querySelector("#selectedCount"),
   riskDeployed: document.querySelector("#riskDeployed"),
   expectedPnL: document.querySelector("#expectedPnL"),
   avgConfidence: document.querySelector("#avgConfidence"),
   allocationRows: document.querySelector("#allocationRows"),
   toggleCurrentPair: document.querySelector("#toggleCurrentPair"),
+  ticketTitle: document.querySelector("#ticketTitle"),
+  ticketStatus: document.querySelector("#ticketStatus"),
+  planRiskBudget: document.querySelector("#planRiskBudget"),
+  planGrossExposure: document.querySelector("#planGrossExposure"),
+  planExpectedReward: document.querySelector("#planExpectedReward"),
+  planRewardRisk: document.querySelector("#planRewardRisk"),
+  planMaxHold: document.querySelector("#planMaxHold"),
+  planHedgeSplit: document.querySelector("#planHedgeSplit"),
+  legATicker: document.querySelector("#legATicker"),
+  legAAction: document.querySelector("#legAAction"),
+  legAEntry: document.querySelector("#legAEntry"),
+  legATarget: document.querySelector("#legATarget"),
+  legAStop: document.querySelector("#legAStop"),
+  legAShares: document.querySelector("#legAShares"),
+  legANotional: document.querySelector("#legANotional"),
+  legBTicker: document.querySelector("#legBTicker"),
+  legBAction: document.querySelector("#legBAction"),
+  legBEntry: document.querySelector("#legBEntry"),
+  legBTarget: document.querySelector("#legBTarget"),
+  legBStop: document.querySelector("#legBStop"),
+  legBShares: document.querySelector("#legBShares"),
+  legBNotional: document.querySelector("#legBNotional"),
+  planNarrative: document.querySelector("#planNarrative"),
+  planChecklist: document.querySelector("#planChecklist"),
 };
 
 function parseDollar(value) {
   return Number(String(value).replace(/[$,]/g, ""));
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function formatMoney(value) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function formatPercent(value, digits = 1) {
+  return `${(value * 100).toFixed(digits)}%`;
+}
+
+function formatCount(value) {
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function formatSessions(value) {
+  return `${value} sessions`;
 }
 
 function getTimeBucket(timePeriod) {
@@ -236,6 +290,16 @@ function getTimeBucket(timePeriod) {
     return "Medium";
   }
   return "Long";
+}
+
+function getMaxHoldSessions(timePeriod) {
+  const match = String(timePeriod).match(/(\d+)\s+to\s+(\d+)\s+(trading days|weeks)/i);
+  if (!match) {
+    return 15;
+  }
+
+  const upper = Number(match[2]);
+  return match[3].toLowerCase() === "weeks" ? upper * 5 : upper;
 }
 
 function getFilteredIndices() {
@@ -254,6 +318,22 @@ function getFilteredIndices() {
   });
 }
 
+function getSelectedFilteredIndices() {
+  return getFilteredIndices().filter((index) => state.selectedPairs.has(index));
+}
+
+function getBudgetInputs() {
+  const capital = Math.max(1000, Number(elements.capitalInput.value) || 100000);
+  const riskPct = clamp((Number(elements.riskInput.value) || 5) / 100, 0.01, 0.2);
+  const stopBudgetPct = clamp((Number(elements.stopBudgetInput.value) || 2.2) / 100, 0.005, 0.1);
+  return {
+    capital,
+    riskPct,
+    stopBudgetPct,
+    maxRiskDollars: capital * riskPct,
+  };
+}
+
 function getPairDistortionBias(index) {
   if (index === state.activeIndex) {
     return Number(elements.distortionSlider.value) / 10;
@@ -263,8 +343,14 @@ function getPairDistortionBias(index) {
 
 function getPairExpectedReturn(index) {
   const signal = PAIR_SIGNALS[index];
-  const sideAReturn = Math.abs((parseDollar(signal.stockA.targetPrice) - parseDollar(signal.stockA.entryPrice)) / parseDollar(signal.stockA.entryPrice));
-  const sideBReturn = Math.abs((parseDollar(signal.stockB.targetPrice) - parseDollar(signal.stockB.entryPrice)) / parseDollar(signal.stockB.entryPrice));
+  const sideAReturn = Math.abs(
+    (parseDollar(signal.stockA.targetPrice) - parseDollar(signal.stockA.entryPrice)) /
+      parseDollar(signal.stockA.entryPrice)
+  );
+  const sideBReturn = Math.abs(
+    (parseDollar(signal.stockB.targetPrice) - parseDollar(signal.stockB.entryPrice)) /
+      parseDollar(signal.stockB.entryPrice)
+  );
   const base = (sideAReturn + sideBReturn) / 2;
   const confidenceBoost = 1 + CONFIDENCE_SCORE[signal.confidence] * 0.08;
   const distortionBoost = 1 + Math.abs(getPairDistortionBias(index)) * 0.2;
@@ -280,12 +366,265 @@ function getPairWeight(index) {
   return confidenceWeight * horizonPenalty * distortionEdge;
 }
 
-function formatMoney(value) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  }).format(value);
+function getTradeSide(direction) {
+  return direction === "Up" ? "Long" : "Short";
+}
+
+function getSizingWeights(signal) {
+  const mode = elements.sizingMode.value;
+  const distortion = Number(elements.distortionSlider.value);
+  const moveA = Math.abs(
+    (parseDollar(signal.stockA.targetPrice) - parseDollar(signal.stockA.entryPrice)) /
+      parseDollar(signal.stockA.entryPrice)
+  );
+  const moveB = Math.abs(
+    (parseDollar(signal.stockB.targetPrice) - parseDollar(signal.stockB.entryPrice)) /
+      parseDollar(signal.stockB.entryPrice)
+  );
+
+  if (mode === "conviction") {
+    if (distortion === 0) {
+      return {
+        aWeight: 0.5,
+        bWeight: 0.5,
+        label: "Conviction weighted",
+      };
+    }
+
+    const baseTilt = signal.confidence === "High" ? 0.08 : signal.confidence === "Medium" ? 0.05 : 0.03;
+    const distortionTilt = Math.min(0.08, Math.abs(distortion) * 0.01);
+    const tilt = Math.min(0.16, baseTilt + distortionTilt);
+    const laggardIsA = distortion < 0;
+    return laggardIsA
+      ? {
+          aWeight: 0.5 + tilt,
+          bWeight: 0.5 - tilt,
+          label: "Conviction weighted",
+        }
+      : {
+          aWeight: 0.5 - tilt,
+          bWeight: 0.5 + tilt,
+          label: "Conviction weighted",
+        };
+  }
+
+  if (mode === "volatility") {
+    const inverseA = 1 / Math.max(moveA, 0.01);
+    const inverseB = 1 / Math.max(moveB, 0.01);
+    const total = inverseA + inverseB;
+    return {
+      aWeight: inverseA / total,
+      bWeight: inverseB / total,
+      label: "Volatility adjusted",
+    };
+  }
+
+  return {
+    aWeight: 0.5,
+    bWeight: 0.5,
+    label: "Balanced",
+  };
+}
+
+function getPortfolioRows(indices) {
+  const { maxRiskDollars, stopBudgetPct } = getBudgetInputs();
+  if (!indices.length) {
+    return [];
+  }
+
+  const baseRows = indices.map((index) => ({
+    index,
+    signal: PAIR_SIGNALS[index],
+    weight: getPairWeight(index),
+    expectedReturn: getPairExpectedReturn(index),
+  }));
+  const totalWeight = baseRows.reduce((sum, row) => sum + row.weight, 0);
+
+  return baseRows.map((row) => {
+    const riskBudget = totalWeight > 0 ? (maxRiskDollars * row.weight) / totalWeight : 0;
+    const grossExposure = stopBudgetPct > 0 ? riskBudget / stopBudgetPct : 0;
+    const expectedPnL = grossExposure * row.expectedReturn;
+    return {
+      ...row,
+      pairLabel: `${row.signal.pair[0]} / ${row.signal.pair[1]}`,
+      riskBudget,
+      grossExposure,
+      expectedPnL,
+      weightPct: totalWeight > 0 ? (row.weight / totalWeight) * 100 : 0,
+    };
+  });
+}
+
+function buildPlanChecklist(plan) {
+  const items = [];
+  const earlyReview = Math.max(2, Math.round(plan.maxHoldSessions * 0.35));
+
+  items.push(
+    `${plan.sideA.action} ${plan.signal.stockA.ticker} and ${plan.sideB.action} ${plan.signal.stockB.ticker} with a ${plan.hedgeSplit} gross split under ${plan.sizingLabel.toLowerCase()} sizing.`
+  );
+
+  if (Math.abs(plan.distortion) >= 7) {
+    items.push("Stretch is extreme. Work the order in clips instead of crossing full size on the first print.");
+  } else {
+    items.push("Spread tension is moderate. One clean entry is acceptable if the open is liquid and the spread is stable.");
+  }
+
+  if (plan.rewardRisk < 1.5) {
+    items.push("Reward to risk is thin at the current stop budget. Wait for a cleaner dislocation or tighten the stop before sizing up.");
+  } else {
+    items.push("Modeled reward to risk is healthy. If the spread starts converging early, let the trade work instead of taking the first small win.");
+  }
+
+  items.push(
+    `Reassess after ${formatSessions(earlyReview)}. If the pair is still widening or the thesis has not started to play out, cut it before the full ${formatSessions(plan.maxHoldSessions)} window expires.`
+  );
+
+  if (!plan.isLive) {
+    items.push("This pair is not currently in the selected book. The ticket is a preview using the present risk settings as if you added it now.");
+  }
+
+  return items;
+}
+
+function getActivePlan() {
+  const signal = PAIR_SIGNALS[state.activeIndex];
+  if (!signal) {
+    return null;
+  }
+
+  const selectedFiltered = getSelectedFilteredIndices();
+  const isLive = selectedFiltered.includes(state.activeIndex);
+  const scope = isLive ? selectedFiltered : [...new Set([...selectedFiltered, state.activeIndex])];
+  const portfolioRow = getPortfolioRows(scope).find((row) => row.index === state.activeIndex);
+
+  if (!portfolioRow) {
+    return null;
+  }
+
+  const stopPct = getBudgetInputs().stopBudgetPct;
+  const sizing = getSizingWeights(signal);
+  const entryA = parseDollar(signal.stockA.entryPrice);
+  const entryB = parseDollar(signal.stockB.entryPrice);
+  const targetA = parseDollar(signal.stockA.targetPrice);
+  const targetB = parseDollar(signal.stockB.targetPrice);
+  const rawNotionalA = portfolioRow.grossExposure * sizing.aWeight;
+  const rawNotionalB = portfolioRow.grossExposure * sizing.bWeight;
+  const sharesA = Math.max(1, Math.floor(rawNotionalA / entryA));
+  const sharesB = Math.max(1, Math.floor(rawNotionalB / entryB));
+  const notionalA = sharesA * entryA;
+  const notionalB = sharesB * entryB;
+  const actualGrossExposure = notionalA + notionalB;
+  const expectedReward = actualGrossExposure * portfolioRow.expectedReturn;
+  const rewardRisk = portfolioRow.riskBudget > 0 ? expectedReward / portfolioRow.riskBudget : 0;
+  const sideAAction = getTradeSide(signal.stockA.direction);
+  const sideBAction = getTradeSide(signal.stockB.direction);
+  const stopA = sideAAction === "Long" ? entryA * (1 - stopPct) : entryA * (1 + stopPct);
+  const stopB = sideBAction === "Long" ? entryB * (1 - stopPct) : entryB * (1 + stopPct);
+  const hedgeSplit = `${Math.round(sizing.aWeight * 100)} / ${Math.round(sizing.bWeight * 100)}`;
+  const maxHoldSessions = getMaxHoldSessions(signal.timePeriod);
+  const distortion = Number(elements.distortionSlider.value);
+
+  const plan = {
+    signal,
+    isLive,
+    sizingLabel: sizing.label,
+    distortion,
+    riskBudget: portfolioRow.riskBudget,
+    grossExposure: actualGrossExposure,
+    expectedReward,
+    rewardRisk,
+    hedgeSplit,
+    maxHoldSessions,
+    sideA: {
+      ticker: signal.stockA.ticker,
+      action: sideAAction,
+      entry: entryA,
+      target: targetA,
+      stop: stopA,
+      shares: sharesA,
+      notional: notionalA,
+    },
+    sideB: {
+      ticker: signal.stockB.ticker,
+      action: sideBAction,
+      entry: entryB,
+      target: targetB,
+      stop: stopB,
+      shares: sharesB,
+      notional: notionalB,
+    },
+  };
+
+  return {
+    ...plan,
+    checklist: buildPlanChecklist(plan),
+  };
+}
+
+function persistState() {
+  try {
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        activeIndex: state.activeIndex,
+        selectedPairs: [...state.selectedPairs],
+        filters: state.filters,
+        capitalInput: elements.capitalInput.value,
+        riskInput: elements.riskInput.value,
+        distortion: elements.distortionSlider.value,
+        sizingMode: elements.sizingMode.value,
+        stopBudgetInput: elements.stopBudgetInput.value,
+      })
+    );
+  } catch (error) {
+    // Ignore persistence failures in private browsing or restricted environments.
+  }
+}
+
+function hydrateState() {
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      return;
+    }
+
+    const saved = JSON.parse(raw);
+    if (Number.isInteger(saved.activeIndex)) {
+      state.activeIndex = clamp(saved.activeIndex, 0, PAIR_SIGNALS.length - 1);
+    }
+    if (Array.isArray(saved.selectedPairs)) {
+      state.selectedPairs = new Set(
+        saved.selectedPairs.filter((index) => Number.isInteger(index) && index >= 0 && index < PAIR_SIGNALS.length)
+      );
+    }
+    if (saved.filters?.confidence) {
+      state.filters.confidence = saved.filters.confidence;
+    }
+    if (saved.filters?.horizon) {
+      state.filters.horizon = saved.filters.horizon;
+    }
+
+    if (saved.capitalInput !== undefined) {
+      elements.capitalInput.value = saved.capitalInput;
+    }
+    if (saved.riskInput !== undefined) {
+      elements.riskInput.value = saved.riskInput;
+    }
+    if (saved.distortion !== undefined) {
+      elements.distortionSlider.value = saved.distortion;
+    }
+    if (saved.sizingMode !== undefined) {
+      elements.sizingMode.value = saved.sizingMode;
+    }
+    if (saved.stopBudgetInput !== undefined) {
+      elements.stopBudgetInput.value = saved.stopBudgetInput;
+    }
+
+    elements.confidenceFilter.value = state.filters.confidence;
+    elements.horizonFilter.value = state.filters.horizon;
+  } catch (error) {
+    // Ignore malformed local state and continue with defaults.
+  }
 }
 
 function renderTabs() {
@@ -392,17 +731,12 @@ function renderSelectionToggle() {
   const signal = PAIR_SIGNALS[state.activeIndex];
   const pairLabel = `${signal.pair[0]} / ${signal.pair[1]}`;
   const isSelected = state.selectedPairs.has(state.activeIndex);
-  elements.toggleCurrentPair.textContent = isSelected
-    ? `Remove ${pairLabel}`
-    : `Add ${pairLabel}`;
+  elements.toggleCurrentPair.textContent = isSelected ? `Remove ${pairLabel}` : `Add ${pairLabel}`;
   elements.toggleCurrentPair.dataset.mode = isSelected ? "remove" : "add";
 }
 
 function renderPortfolio() {
-  const selectedFiltered = getFilteredIndices().filter((index) => state.selectedPairs.has(index));
-  const capital = Math.max(1000, Number(elements.capitalInput.value) || 100000);
-  const riskPct = Math.max(1, Number(elements.riskInput.value) || 5) / 100;
-  const maxRiskDollars = capital * riskPct;
+  const selectedFiltered = getSelectedFilteredIndices();
 
   if (!selectedFiltered.length) {
     elements.allocationRows.innerHTML = `
@@ -417,38 +751,26 @@ function renderPortfolio() {
     return;
   }
 
-  const weights = selectedFiltered.map((index) => ({
-    index,
-    weight: getPairWeight(index),
-    expectedReturn: getPairExpectedReturn(index),
-  }));
-  const totalWeight = weights.reduce((sum, row) => sum + row.weight, 0);
+  const rows = getPortfolioRows(selectedFiltered).sort((left, right) => right.weight - left.weight);
 
   let totalRisk = 0;
   let totalExpectedPnL = 0;
   let totalConfidenceScore = 0;
 
-  elements.allocationRows.innerHTML = weights
-    .sort((a, b) => b.weight - a.weight)
+  elements.allocationRows.innerHTML = rows
     .map((row) => {
-      const signal = PAIR_SIGNALS[row.index];
-      const pairLabel = `${signal.pair[0]} / ${signal.pair[1]}`;
-      const allocation = totalWeight > 0 ? (maxRiskDollars * row.weight) / totalWeight : 0;
-      const expectedPnL = allocation * row.expectedReturn;
-      const weightPct = totalWeight > 0 ? (row.weight / totalWeight) * 100 : 0;
-
-      totalRisk += allocation;
-      totalExpectedPnL += expectedPnL;
-      totalConfidenceScore += CONFIDENCE_SCORE[signal.confidence];
+      totalRisk += row.riskBudget;
+      totalExpectedPnL += row.expectedPnL;
+      totalConfidenceScore += CONFIDENCE_SCORE[row.signal.confidence];
 
       return `
         <tr>
-          <td>${pairLabel}</td>
-          <td>${signal.confidence}</td>
-          <td>${signal.timePeriod}</td>
-          <td>${weightPct.toFixed(1)}%</td>
-          <td>${formatMoney(allocation)}</td>
-          <td>${formatMoney(expectedPnL)}</td>
+          <td>${row.pairLabel}</td>
+          <td>${row.signal.confidence}</td>
+          <td>${row.signal.timePeriod}</td>
+          <td>${row.weightPct.toFixed(1)}%</td>
+          <td>${formatMoney(row.riskBudget)}</td>
+          <td>${formatMoney(row.expectedPnL)}</td>
         </tr>
       `;
     })
@@ -463,13 +785,76 @@ function renderPortfolio() {
   elements.avgConfidence.textContent = confidenceLabel;
 }
 
+function renderLeg(side, tickerEl, actionEl, entryEl, targetEl, stopEl, sharesEl, notionalEl) {
+  tickerEl.textContent = side.ticker;
+  actionEl.textContent = side.action;
+  actionEl.dataset.direction = side.action.toLowerCase();
+  entryEl.textContent = formatMoney(side.entry);
+  targetEl.textContent = formatMoney(side.target);
+  stopEl.textContent = formatMoney(side.stop);
+  sharesEl.textContent = formatCount(side.shares);
+  notionalEl.textContent = formatMoney(side.notional);
+}
+
+function renderExecutionPlanner() {
+  const plan = getActivePlan();
+  if (!plan) {
+    return;
+  }
+
+  elements.ticketTitle.textContent = `${plan.signal.pair[0]} / ${plan.signal.pair[1]} ticket`;
+  elements.ticketStatus.textContent = plan.isLive ? "In book" : "Preview if added";
+  elements.ticketStatus.dataset.mode = plan.isLive ? "live" : "preview";
+  elements.planRiskBudget.textContent = formatMoney(plan.riskBudget);
+  elements.planGrossExposure.textContent = formatMoney(plan.grossExposure);
+  elements.planExpectedReward.textContent = formatMoney(plan.expectedReward);
+  elements.planRewardRisk.textContent = `${plan.rewardRisk.toFixed(2)}x`;
+  elements.planMaxHold.textContent = formatSessions(plan.maxHoldSessions);
+  elements.planHedgeSplit.textContent = plan.hedgeSplit;
+
+  renderLeg(
+    plan.sideA,
+    elements.legATicker,
+    elements.legAAction,
+    elements.legAEntry,
+    elements.legATarget,
+    elements.legAStop,
+    elements.legAShares,
+    elements.legANotional
+  );
+  renderLeg(
+    plan.sideB,
+    elements.legBTicker,
+    elements.legBAction,
+    elements.legBEntry,
+    elements.legBTarget,
+    elements.legBStop,
+    elements.legBShares,
+    elements.legBNotional
+  );
+
+  elements.planNarrative.textContent = `${plan.signal.pair[0]} / ${plan.signal.pair[1]} ${
+    plan.isLive ? "already sits inside the current book" : "is currently out of book"
+  }, so the planner ${plan.isLive ? "sizes the live trade" : "shows the ticket you would run if added now"}. With a ${formatPercent(
+    getBudgetInputs().stopBudgetPct,
+    1
+  )} stop budget and ${plan.sizingLabel.toLowerCase()} construction, the setup supports about ${formatMoney(
+    plan.grossExposure
+  )} of gross exposure for a modeled ${formatMoney(plan.expectedReward)} upside if the spread mean-reverts on schedule.`;
+  elements.planChecklist.innerHTML = plan.checklist.map((item) => `<li>${item}</li>`).join("");
+}
+
 function renderAll() {
   renderTabs();
   renderSignal();
   renderDistortion();
   renderSelectionToggle();
   renderPortfolio();
+  renderExecutionPlanner();
+  persistState();
 }
+
+hydrateState();
 
 elements.distortionSlider.addEventListener("input", () => {
   renderAll();
@@ -494,10 +879,14 @@ elements.horizonFilter.addEventListener("change", () => {
   renderAll();
 });
 
-[elements.capitalInput, elements.riskInput].forEach((input) => {
+[elements.capitalInput, elements.riskInput, elements.stopBudgetInput].forEach((input) => {
   input.addEventListener("input", () => {
-    renderPortfolio();
+    renderAll();
   });
+});
+
+elements.sizingMode.addEventListener("change", () => {
+  renderAll();
 });
 
 renderAll();
