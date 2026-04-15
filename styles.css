@@ -503,8 +503,19 @@ select {
   gap: 14px;
 }
 
+.portfolio-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
 .portfolio-head h3 {
   font-size: 1.3rem;
+}
+
+.screener-summary {
+  color: var(--muted);
+  font-size: 0.92rem;
 }
 
 .toggle-button {
@@ -515,8 +526,82 @@ select {
   cursor: pointer;
 }
 
+.toggle-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .toggle-button[data-mode="add"] {
   border-color: rgba(20, 122, 85, 0.45);
+}
+
+.table-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.table-button,
+.table-status {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.78rem;
+  border-radius: 999px;
+}
+
+.table-button {
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.table-button.is-add {
+  border-color: rgba(20, 122, 85, 0.4);
+}
+
+.table-button.is-remove {
+  border-color: rgba(194, 86, 45, 0.35);
+}
+
+.table-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  background: rgba(24, 21, 17, 0.06);
+}
+
+.table-status.is-selected {
+  color: var(--up);
+  background: rgba(20, 122, 85, 0.12);
+}
+
+.table-status.is-watch {
+  color: var(--muted);
+}
+
+.screener-table td:last-child,
+.screener-table th:last-child {
+  text-align: right;
+}
+
+.sort-button {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.sort-button:hover {
+  color: var(--ink);
+}
+
+.screener-table .is-active-row {
+  background: rgba(20, 122, 85, 0.06);
 }
 
 .toggle-button[data-mode="remove"] {

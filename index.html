@@ -309,7 +309,10 @@
             <p class="section-label">Selected Pair Book</p>
             <h3>Allocated trade plan</h3>
           </div>
-          <button id="toggleCurrentPair" class="toggle-button" type="button"></button>
+          <div class="portfolio-actions">
+            <button id="exportBook" class="toggle-button" type="button">Export CSV</button>
+            <button id="toggleCurrentPair" class="toggle-button" type="button"></button>
+          </div>
         </div>
         <div class="table-wrap">
           <table class="book-table">
@@ -324,6 +327,33 @@
               </tr>
             </thead>
             <tbody id="allocationRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="portfolio-card">
+        <div class="portfolio-head">
+          <div>
+            <p class="section-label">Signal Screener</p>
+            <h3>Filtered opportunity ranking</h3>
+          </div>
+          <p id="screenerSummary" class="screener-summary"></p>
+        </div>
+        <div class="table-wrap">
+          <table class="book-table screener-table">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Pair</th>
+                <th><button class="sort-button" type="button" data-sort-key="confidence">Confidence</button></th>
+                <th>Horizon</th>
+                <th><button class="sort-button" type="button" data-sort-key="modeledEdge">Modeled Edge</button></th>
+                <th><button class="sort-button" type="button" data-sort-key="weight">Book Weight</button></th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="screenerRows"></tbody>
           </table>
         </div>
       </section>

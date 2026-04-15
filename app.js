@@ -184,6 +184,10 @@ const state = {
     confidence: "All",
     horizon: "All",
   },
+  screenerSort: {
+    key: "weight",
+    direction: "desc",
+  },
 };
 
 const elements = {
@@ -225,7 +229,10 @@ const elements = {
   expectedPnL: document.querySelector("#expectedPnL"),
   avgConfidence: document.querySelector("#avgConfidence"),
   allocationRows: document.querySelector("#allocationRows"),
+  exportBook: document.querySelector("#exportBook"),
   toggleCurrentPair: document.querySelector("#toggleCurrentPair"),
+  screenerSummary: document.querySelector("#screenerSummary"),
+  screenerRows: document.querySelector("#screenerRows"),
   ticketTitle: document.querySelector("#ticketTitle"),
   ticketStatus: document.querySelector("#ticketStatus"),
   planRiskBudget: document.querySelector("#planRiskBudget"),
@@ -455,6 +462,101 @@ function getPortfolioRows(indices) {
   });
 }
 
+function getScreenedRows(indices) {
+  const rows = indices
+    .map((index) => {
+      const signal = PAIR_SIGNALS[index];
+      return {
+        index,
+        signal,
+        pairLabel: `${signal.pair[0]} / ${signal.pair[1]}`,
+        modeledEdge: getPairExpectedReturn(index),
+        weight: getPairWeight(index),
+        selected: state.selectedPairs.has(index),
+      };
+    });
+
+  const sorters = {
+    confidence: (left, right) => CONFIDENCE_SCORE[left.signal.confidence] - CONFIDENCE_SCORE[right.signal.confidence],
+    modeledEdge: (left, right) => left.modeledEdge - right.modeledEdge,
+    weight: (left, right) => left.weight - right.weight,
+  };
+
+  const sorter = sorters[state.screenerSort.key] || sorters.weight;
+  const direction = state.screenerSort.direction === "asc" ? 1 : -1;
+
+  return rows.sort((left, right) => {
+    const primary = sorter(left, right) * direction;
+    if (primary !== 0) {
+      return primary > 0 ? 1 : -1;
+    }
+    return left.pairLabel.localeCompare(right.pairLabel);
+  });
+}
+
+function toggleScreenerSort(key) {
+  if (state.screenerSort.key === key) {
+    state.screenerSort.direction = state.screenerSort.direction === "desc" ? "asc" : "desc";
+    return;
+  }
+
+  state.screenerSort.key = key;
+  state.screenerSort.direction = key === "confidence" ? "desc" : "desc";
+}
+
+function buildSortLabel(key, label) {
+  if (state.screenerSort.key !== key) {
+    return label;
+  }
+  return `${label} ${state.screenerSort.direction === "desc" ? "↓" : "↑"}`;
+}
+
+function getSelectedBookExportRows() {
+  const selectedFiltered = getSelectedFilteredIndices();
+  return getPortfolioRows(selectedFiltered)
+    .sort((left, right) => right.weight - left.weight)
+    .map((row) => ({
+      pair: row.pairLabel,
+      confidence: row.signal.confidence,
+      horizon: row.signal.timePeriod,
+      weightPct: row.weightPct,
+      riskBudget: row.riskBudget,
+      expectedPnL: row.expectedPnL,
+    }));
+}
+
+function exportBookCsv() {
+  const rows = getSelectedBookExportRows();
+  if (!rows.length) {
+    return;
+  }
+
+  const header = ["Pair", "Confidence", "Horizon", "WeightPct", "RiskBudgetUSD", "ExpectedPnLUSD"];
+  const lines = rows.map((row) => [
+    row.pair,
+    row.confidence,
+    row.horizon,
+    row.weightPct.toFixed(2),
+    row.riskBudget.toFixed(2),
+    row.expectedPnL.toFixed(2),
+  ]);
+
+  const csv = [header, ...lines]
+    .map((fields) => fields.map((field) => `"${String(field).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const stamp = new Date().toISOString().slice(0, 10);
+  link.href = url;
+  link.download = `pair-book-${stamp}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+}
+
 function buildPlanChecklist(plan) {
   const items = [];
   const earlyReview = Math.max(2, Math.round(plan.maxHoldSessions * 0.35));
@@ -574,6 +676,7 @@ function persistState() {
         distortion: elements.distortionSlider.value,
         sizingMode: elements.sizingMode.value,
         stopBudgetInput: elements.stopBudgetInput.value,
+        screenerSort: state.screenerSort,
       })
     );
   } catch (error) {
@@ -602,6 +705,9 @@ function hydrateState() {
     }
     if (saved.filters?.horizon) {
       state.filters.horizon = saved.filters.horizon;
+    }
+    if (saved.screenerSort?.key && saved.screenerSort?.direction) {
+      state.screenerSort = saved.screenerSort;
     }
 
     if (saved.capitalInput !== undefined) {
@@ -748,6 +854,7 @@ function renderPortfolio() {
     elements.riskDeployed.textContent = formatMoney(0);
     elements.expectedPnL.textContent = formatMoney(0);
     elements.avgConfidence.textContent = "-";
+    elements.exportBook.disabled = true;
     return;
   }
 
@@ -783,6 +890,78 @@ function renderPortfolio() {
   const averageConfidence = totalConfidenceScore / selectedFiltered.length;
   const confidenceLabel = averageConfidence >= 2.6 ? "High" : averageConfidence >= 1.7 ? "Medium" : "Low";
   elements.avgConfidence.textContent = confidenceLabel;
+  elements.exportBook.disabled = false;
+}
+
+function renderScreener() {
+  const filtered = getFilteredIndices();
+  const rows = getScreenedRows(filtered);
+  const selectedCount = rows.filter((row) => row.selected).length;
+  const totalWeight = rows.reduce((sum, row) => sum + row.weight, 0);
+
+  elements.screenerSummary.textContent = rows.length
+    ? `${selectedCount} of ${rows.length} filtered pairs are in book`
+    : "No pairs match the current filters";
+
+  if (!rows.length) {
+    elements.exportBook.disabled = getSelectedFilteredIndices().length === 0;
+    elements.screenerRows.innerHTML = `
+      <tr>
+        <td colspan="8" class="empty-note">Adjust the filters to surface more pair candidates.</td>
+      </tr>
+    `;
+    return;
+  }
+
+  document.querySelectorAll(".sort-button").forEach((button) => {
+    const label = button.dataset.sortKey === "confidence"
+      ? "Confidence"
+      : button.dataset.sortKey === "modeledEdge"
+        ? "Modeled Edge"
+        : "Book Weight";
+    button.textContent = buildSortLabel(button.dataset.sortKey, label);
+  });
+
+  elements.screenerRows.innerHTML = rows
+    .map((row, rank) => {
+      const normalizedWeight = totalWeight > 0 ? row.weight / totalWeight : 0;
+      const isActive = row.index === state.activeIndex;
+      return `
+        <tr class="${isActive ? "is-active-row" : ""}">
+          <td>${rank + 1}</td>
+          <td>${row.pairLabel}</td>
+          <td>${row.signal.confidence}</td>
+          <td>${row.signal.timePeriod}</td>
+          <td>${formatPercent(row.modeledEdge, 1)}</td>
+          <td>${formatPercent(normalizedWeight, 1)}</td>
+          <td><span class="table-status ${row.selected ? "is-selected" : "is-watch"}">${row.selected ? "In book" : "Watchlist"}</span></td>
+          <td>
+            <div class="table-actions">
+              <button class="table-button" type="button" data-action="open" data-index="${row.index}">Open</button>
+              <button class="table-button ${row.selected ? "is-remove" : "is-add"}" type="button" data-action="toggle" data-index="${row.index}">
+                ${row.selected ? "Remove" : "Add"}
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  elements.screenerRows.querySelectorAll(".table-button").forEach((button) => {
+    button.addEventListener("click", () => {
+      const index = Number(button.dataset.index);
+      if (button.dataset.action === "open") {
+        state.activeIndex = index;
+      } else if (state.selectedPairs.has(index)) {
+        state.selectedPairs.delete(index);
+      } else {
+        state.selectedPairs.add(index);
+      }
+      renderAll();
+    });
+  });
+
 }
 
 function renderLeg(side, tickerEl, actionEl, entryEl, targetEl, stopEl, sharesEl, notionalEl) {
@@ -851,6 +1030,7 @@ function renderAll() {
   renderSelectionToggle();
   renderPortfolio();
   renderExecutionPlanner();
+  renderScreener();
   persistState();
 }
 
@@ -887,6 +1067,17 @@ elements.horizonFilter.addEventListener("change", () => {
 
 elements.sizingMode.addEventListener("change", () => {
   renderAll();
+});
+
+elements.exportBook.addEventListener("click", () => {
+  exportBookCsv();
+});
+
+document.querySelectorAll(".sort-button").forEach((button) => {
+  button.addEventListener("click", () => {
+    toggleScreenerSort(button.dataset.sortKey);
+    renderAll();
+  });
 });
 
 renderAll();

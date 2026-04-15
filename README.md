@@ -7,6 +7,8 @@ This project is now a portfolio-oriented ETF pair strategy viewer.
 - Added a strategy lab layout with capital and risk controls.
 - Added confidence and horizon filters for pair discovery.
 - Added pair selection controls and a live allocated trade book table.
+- Added a ranked signal screener so filtered pairs can be compared and added to the book quickly.
+- Added sortable screener columns and CSV export for the selected book.
 - Added portfolio-level metrics: selected count, deployed risk, expected P/L, and average confidence.
 - Kept the original pair relationship and distortion engine, and wired distortion into allocation weighting.
 
