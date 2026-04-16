@@ -14,12 +14,11 @@ This project is now a portfolio-oriented ETF pair strategy viewer.
 
 ## Run
 
-Open [index.html](/Users/nis/Desktop/coding/pair_trading/index.html) in a browser.
+Open `index.html` in a browser.
 
 Or use the local server:
 
 ```bash
-cd /Users/nis/Desktop/coding/pair_trading
 npm start
 ```
 
