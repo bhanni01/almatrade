@@ -433,6 +433,38 @@ function getSizingWeights(signal) {
   };
 }
 
+function getLegExpectedReturn(stock) {
+  return Math.abs((parseDollar(stock.targetPrice) - parseDollar(stock.entryPrice)) / parseDollar(stock.entryPrice));
+}
+
+function sizePairLegs({ riskBudget, stopPct, sizing, signal }) {
+  const entryA = parseDollar(signal.stockA.entryPrice);
+  const entryB = parseDollar(signal.stockB.entryPrice);
+  const stopRiskA = entryA * stopPct;
+  const stopRiskB = entryB * stopPct;
+  const riskBudgetA = riskBudget * sizing.aWeight;
+  const riskBudgetB = riskBudget * sizing.bWeight;
+  const sharesA = Math.max(1, Math.floor(riskBudgetA / Math.max(stopRiskA, 0.01)));
+  const sharesB = Math.max(1, Math.floor(riskBudgetB / Math.max(stopRiskB, 0.01)));
+  const notionalA = sharesA * entryA;
+  const notionalB = sharesB * entryB;
+  const actualRiskA = sharesA * stopRiskA;
+  const actualRiskB = sharesB * stopRiskB;
+
+  return {
+    entryA,
+    entryB,
+    sharesA,
+    sharesB,
+    notionalA,
+    notionalB,
+    actualRiskA,
+    actualRiskB,
+    actualRisk: actualRiskA + actualRiskB,
+    actualGrossExposure: notionalA + notionalB,
+  };
+}
+
 function getPortfolioRows(indices) {
   const { maxRiskDollars, stopBudgetPct } = getBudgetInputs();
   if (!indices.length) {
@@ -605,24 +637,26 @@ function getActivePlan() {
 
   const stopPct = getBudgetInputs().stopBudgetPct;
   const sizing = getSizingWeights(signal);
-  const entryA = parseDollar(signal.stockA.entryPrice);
-  const entryB = parseDollar(signal.stockB.entryPrice);
+  const sizedLegs = sizePairLegs({
+    riskBudget: portfolioRow.riskBudget,
+    stopPct,
+    sizing,
+    signal,
+  });
+  const { entryA, entryB } = sizedLegs;
   const targetA = parseDollar(signal.stockA.targetPrice);
   const targetB = parseDollar(signal.stockB.targetPrice);
-  const rawNotionalA = portfolioRow.grossExposure * sizing.aWeight;
-  const rawNotionalB = portfolioRow.grossExposure * sizing.bWeight;
-  const sharesA = Math.max(1, Math.floor(rawNotionalA / entryA));
-  const sharesB = Math.max(1, Math.floor(rawNotionalB / entryB));
-  const notionalA = sharesA * entryA;
-  const notionalB = sharesB * entryB;
-  const actualGrossExposure = notionalA + notionalB;
-  const expectedReward = actualGrossExposure * portfolioRow.expectedReturn;
-  const rewardRisk = portfolioRow.riskBudget > 0 ? expectedReward / portfolioRow.riskBudget : 0;
+  const expectedReward =
+    sizedLegs.notionalA * getLegExpectedReturn(signal.stockA) +
+    sizedLegs.notionalB * getLegExpectedReturn(signal.stockB);
+  const rewardRisk = sizedLegs.actualRisk > 0 ? expectedReward / sizedLegs.actualRisk : 0;
   const sideAAction = getTradeSide(signal.stockA.direction);
   const sideBAction = getTradeSide(signal.stockB.direction);
   const stopA = sideAAction === "Long" ? entryA * (1 - stopPct) : entryA * (1 + stopPct);
   const stopB = sideBAction === "Long" ? entryB * (1 - stopPct) : entryB * (1 + stopPct);
-  const hedgeSplit = `${Math.round(sizing.aWeight * 100)} / ${Math.round(sizing.bWeight * 100)}`;
+  const grossSplitA = sizedLegs.actualGrossExposure > 0 ? (sizedLegs.notionalA / sizedLegs.actualGrossExposure) * 100 : 50;
+  const grossSplitB = sizedLegs.actualGrossExposure > 0 ? (sizedLegs.notionalB / sizedLegs.actualGrossExposure) * 100 : 50;
+  const hedgeSplit = `${Math.round(grossSplitA)} / ${Math.round(grossSplitB)}`;
   const maxHoldSessions = getMaxHoldSessions(signal.timePeriod);
   const distortion = Number(elements.distortionSlider.value);
 
@@ -632,7 +666,8 @@ function getActivePlan() {
     sizingLabel: sizing.label,
     distortion,
     riskBudget: portfolioRow.riskBudget,
-    grossExposure: actualGrossExposure,
+    actualRisk: sizedLegs.actualRisk,
+    grossExposure: sizedLegs.actualGrossExposure,
     expectedReward,
     rewardRisk,
     hedgeSplit,
@@ -643,8 +678,8 @@ function getActivePlan() {
       entry: entryA,
       target: targetA,
       stop: stopA,
-      shares: sharesA,
-      notional: notionalA,
+      shares: sizedLegs.sharesA,
+      notional: sizedLegs.notionalA,
     },
     sideB: {
       ticker: signal.stockB.ticker,
@@ -652,8 +687,8 @@ function getActivePlan() {
       entry: entryB,
       target: targetB,
       stop: stopB,
-      shares: sharesB,
-      notional: notionalB,
+      shares: sizedLegs.sharesB,
+      notional: sizedLegs.notionalB,
     },
   };
 
@@ -984,7 +1019,7 @@ function renderExecutionPlanner() {
   elements.ticketTitle.textContent = `${plan.signal.pair[0]} / ${plan.signal.pair[1]} ticket`;
   elements.ticketStatus.textContent = plan.isLive ? "In book" : "Preview if added";
   elements.ticketStatus.dataset.mode = plan.isLive ? "live" : "preview";
-  elements.planRiskBudget.textContent = formatMoney(plan.riskBudget);
+  elements.planRiskBudget.textContent = `${formatMoney(plan.actualRisk)} of ${formatMoney(plan.riskBudget)}`;
   elements.planGrossExposure.textContent = formatMoney(plan.grossExposure);
   elements.planExpectedReward.textContent = formatMoney(plan.expectedReward);
   elements.planRewardRisk.textContent = `${plan.rewardRisk.toFixed(2)}x`;
@@ -1017,7 +1052,9 @@ function renderExecutionPlanner() {
   }, so the planner ${plan.isLive ? "sizes the live trade" : "shows the ticket you would run if added now"}. With a ${formatPercent(
     getBudgetInputs().stopBudgetPct,
     1
-  )} stop budget and ${plan.sizingLabel.toLowerCase()} construction, the setup supports about ${formatMoney(
+  )} stop budget and ${plan.sizingLabel.toLowerCase()} construction, the sized ticket uses ${formatMoney(
+    plan.actualRisk
+  )} of stop risk across about ${formatMoney(
     plan.grossExposure
   )} of gross exposure for a modeled ${formatMoney(plan.expectedReward)} upside if the spread mean-reverts on schedule.`;
   elements.planChecklist.innerHTML = plan.checklist.map((item) => `<li>${item}</li>`).join("");
