@@ -102,6 +102,27 @@ h1 {
   padding: 22px;
 }
 
+.summary-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.snapshot-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.share-feedback {
+  min-height: 1em;
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-family: "IBM Plex Mono", monospace;
+}
+
 .field-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -650,6 +671,14 @@ th {
   .lab-grid,
   .execution-summary {
     grid-template-columns: 1fr;
+  }
+
+  .summary-head {
+    flex-direction: column;
+  }
+
+  .snapshot-actions {
+    align-items: stretch;
   }
 }
 

@@ -69,7 +69,13 @@
         </article>
 
         <article class="summary-card">
-          <p class="section-label">Portfolio Snapshot</p>
+          <div class="summary-head">
+            <p class="section-label">Portfolio Snapshot</p>
+            <div class="snapshot-actions">
+              <button id="shareSnapshot" class="toggle-button" type="button">Copy Snapshot Link</button>
+              <span id="shareFeedback" class="share-feedback" aria-live="polite"></span>
+            </div>
+          </div>
           <div class="snapshot-grid">
             <div>
               <span>Selected pairs</span>

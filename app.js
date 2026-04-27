@@ -176,6 +176,7 @@ const CONFIDENCE_SCORE = {
 };
 
 const STORAGE_KEY = "pair-strategy-lab-state";
+const SHARE_PARAM = "snapshot";
 
 const state = {
   activeIndex: 0,
@@ -228,6 +229,8 @@ const elements = {
   riskDeployed: document.querySelector("#riskDeployed"),
   expectedPnL: document.querySelector("#expectedPnL"),
   avgConfidence: document.querySelector("#avgConfidence"),
+  shareSnapshot: document.querySelector("#shareSnapshot"),
+  shareFeedback: document.querySelector("#shareFeedback"),
   allocationRows: document.querySelector("#allocationRows"),
   exportBook: document.querySelector("#exportBook"),
   toggleCurrentPair: document.querySelector("#toggleCurrentPair"),
@@ -287,6 +290,22 @@ function formatCount(value) {
 
 function formatSessions(value) {
   return `${value} sessions`;
+}
+
+function encodeSnapshot(payload) {
+  return window.btoa(
+    encodeURIComponent(JSON.stringify(payload)).replace(/%([0-9A-F]{2})/g, (_, hex) =>
+      String.fromCharCode(Number.parseInt(hex, 16))
+    )
+  );
+}
+
+function decodeSnapshot(value) {
+  const binary = window.atob(value);
+  const encoded = Array.from(binary, (char) =>
+    `%${char.charCodeAt(0).toString(16).padStart(2, "0")}`
+  ).join("");
+  return JSON.parse(decodeURIComponent(encoded));
 }
 
 function getTimeBucket(timePeriod) {
@@ -557,6 +576,57 @@ function getSelectedBookExportRows() {
     }));
 }
 
+function getSerializableState() {
+  return {
+    activeIndex: state.activeIndex,
+    selectedPairs: [...state.selectedPairs].sort((left, right) => left - right),
+    filters: { ...state.filters },
+    capitalInput: elements.capitalInput.value,
+    riskInput: elements.riskInput.value,
+    distortion: elements.distortionSlider.value,
+    sizingMode: elements.sizingMode.value,
+    stopBudgetInput: elements.stopBudgetInput.value,
+    screenerSort: { ...state.screenerSort },
+  };
+}
+
+function buildSnapshotUrl() {
+  const url = new URL(window.location.href);
+  url.searchParams.set(SHARE_PARAM, encodeSnapshot(getSerializableState()));
+  return url.toString();
+}
+
+function syncSnapshotUrl() {
+  const url = new URL(window.location.href);
+  url.searchParams.set(SHARE_PARAM, encodeSnapshot(getSerializableState()));
+  window.history.replaceState({}, "", url);
+}
+
+function setShareFeedback(message, isError = false) {
+  elements.shareFeedback.textContent = message;
+  elements.shareFeedback.style.color = isError ? "var(--down)" : "var(--muted)";
+}
+
+async function copySnapshotLink() {
+  const url = buildSnapshotUrl();
+
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(url);
+    } else {
+      const input = document.createElement("input");
+      input.value = url;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand("copy");
+      document.body.removeChild(input);
+    }
+    setShareFeedback("Snapshot link copied.");
+  } catch (error) {
+    setShareFeedback("Copy failed. Use the URL bar link.", true);
+  }
+}
+
 function exportBookCsv() {
   const rows = getSelectedBookExportRows();
   if (!rows.length) {
@@ -700,71 +770,76 @@ function getActivePlan() {
 
 function persistState() {
   try {
-    window.localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        activeIndex: state.activeIndex,
-        selectedPairs: [...state.selectedPairs],
-        filters: state.filters,
-        capitalInput: elements.capitalInput.value,
-        riskInput: elements.riskInput.value,
-        distortion: elements.distortionSlider.value,
-        sizingMode: elements.sizingMode.value,
-        stopBudgetInput: elements.stopBudgetInput.value,
-        screenerSort: state.screenerSort,
-      })
-    );
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(getSerializableState()));
   } catch (error) {
     // Ignore persistence failures in private browsing or restricted environments.
   }
 }
 
+function applySavedState(saved) {
+  if (!saved || typeof saved !== "object") {
+    return;
+  }
+
+  if (Number.isInteger(saved.activeIndex)) {
+    state.activeIndex = clamp(saved.activeIndex, 0, PAIR_SIGNALS.length - 1);
+  }
+  if (Array.isArray(saved.selectedPairs)) {
+    state.selectedPairs = new Set(
+      saved.selectedPairs.filter((index) => Number.isInteger(index) && index >= 0 && index < PAIR_SIGNALS.length)
+    );
+  }
+  if (saved.filters?.confidence) {
+    state.filters.confidence = saved.filters.confidence;
+  }
+  if (saved.filters?.horizon) {
+    state.filters.horizon = saved.filters.horizon;
+  }
+  if (saved.screenerSort?.key && saved.screenerSort?.direction) {
+    state.screenerSort = saved.screenerSort;
+  }
+
+  if (saved.capitalInput !== undefined) {
+    elements.capitalInput.value = saved.capitalInput;
+  }
+  if (saved.riskInput !== undefined) {
+    elements.riskInput.value = saved.riskInput;
+  }
+  if (saved.distortion !== undefined) {
+    elements.distortionSlider.value = saved.distortion;
+  }
+  if (saved.sizingMode !== undefined) {
+    elements.sizingMode.value = saved.sizingMode;
+  }
+  if (saved.stopBudgetInput !== undefined) {
+    elements.stopBudgetInput.value = saved.stopBudgetInput;
+  }
+
+  elements.confidenceFilter.value = state.filters.confidence;
+  elements.horizonFilter.value = state.filters.horizon;
+}
+
 function hydrateState() {
+  let loaded = false;
+
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return;
+    if (raw) {
+      applySavedState(JSON.parse(raw));
+      loaded = true;
     }
-
-    const saved = JSON.parse(raw);
-    if (Number.isInteger(saved.activeIndex)) {
-      state.activeIndex = clamp(saved.activeIndex, 0, PAIR_SIGNALS.length - 1);
-    }
-    if (Array.isArray(saved.selectedPairs)) {
-      state.selectedPairs = new Set(
-        saved.selectedPairs.filter((index) => Number.isInteger(index) && index >= 0 && index < PAIR_SIGNALS.length)
-      );
-    }
-    if (saved.filters?.confidence) {
-      state.filters.confidence = saved.filters.confidence;
-    }
-    if (saved.filters?.horizon) {
-      state.filters.horizon = saved.filters.horizon;
-    }
-    if (saved.screenerSort?.key && saved.screenerSort?.direction) {
-      state.screenerSort = saved.screenerSort;
-    }
-
-    if (saved.capitalInput !== undefined) {
-      elements.capitalInput.value = saved.capitalInput;
-    }
-    if (saved.riskInput !== undefined) {
-      elements.riskInput.value = saved.riskInput;
-    }
-    if (saved.distortion !== undefined) {
-      elements.distortionSlider.value = saved.distortion;
-    }
-    if (saved.sizingMode !== undefined) {
-      elements.sizingMode.value = saved.sizingMode;
-    }
-    if (saved.stopBudgetInput !== undefined) {
-      elements.stopBudgetInput.value = saved.stopBudgetInput;
-    }
-
-    elements.confidenceFilter.value = state.filters.confidence;
-    elements.horizonFilter.value = state.filters.horizon;
   } catch (error) {
     // Ignore malformed local state and continue with defaults.
+  }
+
+  try {
+    const snapshot = new URL(window.location.href).searchParams.get(SHARE_PARAM);
+    if (snapshot) {
+      applySavedState(decodeSnapshot(snapshot));
+      setShareFeedback(loaded ? "Loaded shared snapshot over saved local state." : "Loaded shared snapshot.");
+    }
+  } catch (error) {
+    setShareFeedback("Snapshot link was invalid. Using local defaults.", true);
   }
 }
 
@@ -1069,6 +1144,7 @@ function renderAll() {
   renderExecutionPlanner();
   renderScreener();
   persistState();
+  syncSnapshotUrl();
 }
 
 hydrateState();
@@ -1108,6 +1184,10 @@ elements.sizingMode.addEventListener("change", () => {
 
 elements.exportBook.addEventListener("click", () => {
   exportBookCsv();
+});
+
+elements.shareSnapshot.addEventListener("click", () => {
+  copySnapshotLink();
 });
 
 document.querySelectorAll(".sort-button").forEach((button) => {
