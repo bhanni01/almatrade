@@ -135,6 +135,12 @@ h1 {
   gap: 8px;
 }
 
+.field-note {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-family: "IBM Plex Mono", monospace;
+}
+
 .field span {
   color: var(--muted);
   font-size: 0.85rem;
@@ -179,6 +185,123 @@ select {
   flex-wrap: wrap;
   gap: 10px;
   margin-top: 18px;
+}
+
+.scenario-card {
+  margin-top: 18px;
+  padding: 24px;
+  background: linear-gradient(135deg, rgba(24, 21, 17, 0.96), rgba(58, 41, 20, 0.94));
+  color: #f8f1e4;
+  border-radius: 28px;
+  box-shadow: var(--shadow);
+}
+
+.scenario-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.scenario-head .section-label,
+.scenario-card .scenario-metrics span,
+.scenario-card .scenario-summary span,
+.scenario-narrative {
+  color: rgba(248, 241, 228, 0.72);
+}
+
+.scenario-head h2 {
+  font-size: clamp(1.6rem, 3vw, 2.4rem);
+}
+
+.scenario-narrative {
+  max-width: 52ch;
+  line-height: 1.7;
+}
+
+.scenario-summary {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.scenario-summary div,
+.scenario-row {
+  border: 1px solid rgba(248, 241, 228, 0.14);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.scenario-summary div {
+  padding: 16px;
+}
+
+.scenario-summary strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 1.25rem;
+}
+
+.scenario-grid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.scenario-row {
+  padding: 18px;
+}
+
+.scenario-row.is-strong {
+  box-shadow: inset 0 0 0 1px rgba(20, 122, 85, 0.5);
+}
+
+.scenario-row.is-mixed {
+  box-shadow: inset 0 0 0 1px rgba(226, 172, 72, 0.45);
+}
+
+.scenario-row.is-fragile {
+  box-shadow: inset 0 0 0 1px rgba(194, 86, 45, 0.55);
+}
+
+.scenario-row-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.scenario-row-head h3 {
+  font-size: 1.45rem;
+}
+
+.scenario-score {
+  min-width: 52px;
+  text-align: center;
+  padding: 10px 12px;
+  border-radius: 16px;
+  font-family: "IBM Plex Mono", monospace;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.scenario-metrics {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.scenario-metrics div {
+  padding: 12px 0 0;
+  border-top: 1px solid rgba(248, 241, 228, 0.1);
+}
+
+.scenario-metrics strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 1.05rem;
 }
 
 .pair-tab {
@@ -517,6 +640,10 @@ select {
   margin-top: 18px;
 }
 
+.concentration-card {
+  padding: 22px;
+}
+
 .portfolio-head {
   display: flex;
   justify-content: space-between;
@@ -659,8 +786,82 @@ th {
   padding: 8px 0;
 }
 
+.concentration-grid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 16px;
+}
+
+.concentration-overview {
+  display: grid;
+  gap: 12px;
+}
+
+.concentration-overview div,
+.concentration-row {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.concentration-overview span,
+.concentration-row-head p,
+.concentration-meta {
+  color: var(--muted);
+}
+
+.concentration-overview strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 1.15rem;
+}
+
+.concentration-rows {
+  display: grid;
+  gap: 12px;
+}
+
+.concentration-row-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.concentration-row-head h4,
+.concentration-row-head p {
+  margin: 0;
+}
+
+.concentration-row-head strong {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 1rem;
+}
+
+.concentration-bar {
+  height: 12px;
+  margin-top: 14px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(24, 21, 17, 0.08);
+}
+
+.concentration-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(20, 122, 85, 0.8), rgba(194, 86, 45, 0.85));
+}
+
+.concentration-meta {
+  margin-top: 12px;
+  line-height: 1.6;
+}
+
 @media (max-width: 900px) {
   .config-grid,
+  .scenario-summary,
   .signal-grid,
   .execution-grid {
     grid-template-columns: 1fr;
@@ -669,7 +870,10 @@ th {
   .field-grid,
   .snapshot-grid,
   .lab-grid,
-  .execution-summary {
+  .execution-summary,
+  .scenario-grid,
+  .scenario-metrics,
+  .concentration-grid {
     grid-template-columns: 1fr;
   }
 
@@ -684,6 +888,7 @@ th {
 
 @media (max-width: 760px) {
   .relation-head,
+  .scenario-head,
   .portfolio-head,
   .execution-head,
   .leg-head {

@@ -189,6 +189,8 @@ const state = {
     key: "weight",
     direction: "desc",
   },
+  regime: "balanced",
+  stress: 35,
 };
 
 const elements = {
@@ -225,12 +227,26 @@ const elements = {
   horizonFilter: document.querySelector("#horizonFilter"),
   sizingMode: document.querySelector("#sizingMode"),
   stopBudgetInput: document.querySelector("#stopBudgetInput"),
+  regimeSelect: document.querySelector("#regimeSelect"),
+  stressInput: document.querySelector("#stressInput"),
+  stressValue: document.querySelector("#stressValue"),
   selectedCount: document.querySelector("#selectedCount"),
   riskDeployed: document.querySelector("#riskDeployed"),
   expectedPnL: document.querySelector("#expectedPnL"),
   avgConfidence: document.querySelector("#avgConfidence"),
   shareSnapshot: document.querySelector("#shareSnapshot"),
   shareFeedback: document.querySelector("#shareFeedback"),
+  scenarioNarrative: document.querySelector("#scenarioNarrative"),
+  scenarioExpectedPnL: document.querySelector("#scenarioExpectedPnL"),
+  scenarioConfidenceDrag: document.querySelector("#scenarioConfidenceDrag"),
+  scenarioBreakRisk: document.querySelector("#scenarioBreakRisk"),
+  scenarioWeakestPair: document.querySelector("#scenarioWeakestPair"),
+  scenarioRows: document.querySelector("#scenarioRows"),
+  concentrationSummary: document.querySelector("#concentrationSummary"),
+  primaryTheme: document.querySelector("#primaryTheme"),
+  overlapScore: document.querySelector("#overlapScore"),
+  diversificationRead: document.querySelector("#diversificationRead"),
+  concentrationRows: document.querySelector("#concentrationRows"),
   allocationRows: document.querySelector("#allocationRows"),
   exportBook: document.querySelector("#exportBook"),
   toggleCurrentPair: document.querySelector("#toggleCurrentPair"),
@@ -290,6 +306,10 @@ function formatCount(value) {
 
 function formatSessions(value) {
   return `${value} sessions`;
+}
+
+function formatSignedMoney(value) {
+  return `${value >= 0 ? "+" : "-"}${formatMoney(Math.abs(value))}`;
 }
 
 function encodeSnapshot(payload) {
@@ -367,6 +387,142 @@ function getPairDistortionBias(index) {
   return 0;
 }
 
+function getStressIntensity() {
+  return clamp((Number(elements.stressInput.value) || state.stress || 35) / 100, 0, 1);
+}
+
+function getPairTags(signal) {
+  const members = new Set([signal.pair[0], signal.pair[1], signal.stockA.ticker, signal.stockB.ticker]);
+  const tags = new Set();
+
+  if ([...members].some((ticker) => ["QQQ", "XLK", "QLD", "QID", "TNA"].includes(ticker))) {
+    tags.add("growth");
+  }
+  if ([...members].some((ticker) => ["TLT", "XLU", "FAZ", "QID"].includes(ticker))) {
+    tags.add("defensive");
+  }
+  if ([...members].some((ticker) => ["XME", "EWC", "EWA", "XLF", "FAS"].includes(ticker))) {
+    tags.add("cyclical");
+  }
+  if ([...members].some((ticker) => ["TLT", "XLU"].includes(ticker))) {
+    tags.add("rates");
+  }
+  if ([...members].some((ticker) => ["FAS", "FAZ", "QLD", "QID", "TNA"].includes(ticker))) {
+    tags.add("leveraged");
+  }
+  if (signal.confidence === "Low") {
+    tags.add("fragile");
+  }
+
+  return tags;
+}
+
+function getThemeLabel(tag) {
+  const labels = {
+    growth: "Growth beta",
+    defensive: "Defensive ballast",
+    cyclical: "Cyclical beta",
+    rates: "Rates sensitivity",
+    leveraged: "Leverage path risk",
+    fragile: "Fragile thesis",
+  };
+
+  return labels[tag] || tag;
+}
+
+function getRegimeProfile() {
+  const profiles = {
+    balanced: {
+      label: "Balanced tape",
+      narrative:
+        "The market is trading in two-way flow. Mean reversion still matters, but dislocations close at a normal pace instead of violently snapping back.",
+      edgeShift: 0,
+      breakShift: 0,
+      confidenceDrag: 0,
+      tagAdjustments: {
+        leveraged: { edge: -0.03, break: 0.03 },
+      },
+    },
+    riskOff: {
+      label: "Risk-off flush",
+      narrative:
+        "Liquidity thins out, crowded growth trades de-rate, and defensive catch-up ideas hold together better than high-beta spreads.",
+      edgeShift: -0.06,
+      breakShift: 0.08,
+      confidenceDrag: 0.2,
+      tagAdjustments: {
+        growth: { edge: -0.12, break: 0.1 },
+        cyclical: { edge: -0.08, break: 0.07 },
+        defensive: { edge: 0.05, break: -0.03 },
+        rates: { edge: 0.04, break: -0.02 },
+        leveraged: { edge: -0.14, break: 0.12 },
+        fragile: { edge: -0.08, break: 0.05 },
+      },
+    },
+    riskOn: {
+      label: "Risk-on chase",
+      narrative:
+        "Momentum stays hot and crowded leaders can remain overextended. The book gets paid faster when it owns the laggard side without leaning too hard on inverse products.",
+      edgeShift: 0.03,
+      breakShift: 0.02,
+      confidenceDrag: 0.08,
+      tagAdjustments: {
+        growth: { edge: 0.06, break: -0.02 },
+        cyclical: { edge: 0.04, break: -0.01 },
+        defensive: { edge: -0.05, break: 0.03 },
+        leveraged: { edge: -0.02, break: 0.06 },
+      },
+    },
+    inflation: {
+      label: "Inflation shock",
+      narrative:
+        "Rates volatility dominates. Commodity and financial sleeves can keep pressing while duration-heavy hedges become less reliable.",
+      edgeShift: -0.02,
+      breakShift: 0.05,
+      confidenceDrag: 0.14,
+      tagAdjustments: {
+        cyclical: { edge: 0.03, break: 0.01 },
+        rates: { edge: -0.09, break: 0.08 },
+        defensive: { edge: -0.04, break: 0.04 },
+        growth: { edge: -0.03, break: 0.03 },
+        leveraged: { edge: -0.08, break: 0.09 },
+      },
+    },
+  };
+
+  return profiles[state.regime] || profiles.balanced;
+}
+
+function getPairScenarioMetrics(index) {
+  const signal = PAIR_SIGNALS[index];
+  const profile = getRegimeProfile();
+  const intensity = getStressIntensity();
+  const tags = getPairTags(signal);
+  let edgeModifier = profile.edgeShift;
+  let breakModifier = profile.breakShift;
+
+  for (const tag of tags) {
+    if (profile.tagAdjustments[tag]) {
+      edgeModifier += profile.tagAdjustments[tag].edge || 0;
+      breakModifier += profile.tagAdjustments[tag].break || 0;
+    }
+  }
+
+  const distortionRelief = Math.abs(getPairDistortionBias(index)) * 0.04;
+  const edgeDelta = edgeModifier * intensity + distortionRelief;
+  const breakRisk = clamp(0.18 + breakModifier * intensity + (tags.has("leveraged") ? 0.05 : 0), 0.05, 0.92);
+  const confidencePenalty = clamp(profile.confidenceDrag * intensity + (tags.has("fragile") ? 0.08 * intensity : 0), 0, 0.7);
+  const stressScore = clamp(0.62 + edgeDelta - breakRisk * 0.28 - confidencePenalty * 0.4, 0.05, 0.95);
+
+  return {
+    profile,
+    edgeDelta,
+    breakRisk,
+    confidencePenalty,
+    stressScore,
+  };
+}
+
 function getPairExpectedReturn(index) {
   const signal = PAIR_SIGNALS[index];
   const sideAReturn = Math.abs(
@@ -380,7 +536,8 @@ function getPairExpectedReturn(index) {
   const base = (sideAReturn + sideBReturn) / 2;
   const confidenceBoost = 1 + CONFIDENCE_SCORE[signal.confidence] * 0.08;
   const distortionBoost = 1 + Math.abs(getPairDistortionBias(index)) * 0.2;
-  return base * confidenceBoost * distortionBoost;
+  const scenario = getPairScenarioMetrics(index);
+  return base * confidenceBoost * distortionBoost * (1 + scenario.edgeDelta) * (1 - scenario.confidencePenalty * 0.35);
 }
 
 function getPairWeight(index) {
@@ -389,7 +546,10 @@ function getPairWeight(index) {
   const horizon = getTimeBucket(signal.timePeriod);
   const horizonPenalty = horizon === "Short" ? 0.8 : horizon === "Medium" ? 1 : 0.9;
   const distortionEdge = index === state.activeIndex ? 1 + Math.abs(getPairDistortionBias(index)) * 0.35 : 1;
-  return confidenceWeight * horizonPenalty * distortionEdge;
+  const scenario = getPairScenarioMetrics(index);
+  const stressWeight = 0.7 + scenario.stressScore * 0.9;
+  const breakPenalty = 1 - scenario.breakRisk * 0.2;
+  return confidenceWeight * horizonPenalty * distortionEdge * stressWeight * breakPenalty;
 }
 
 function getTradeSide(direction) {
@@ -523,6 +683,7 @@ function getScreenedRows(indices) {
         pairLabel: `${signal.pair[0]} / ${signal.pair[1]}`,
         modeledEdge: getPairExpectedReturn(index),
         weight: getPairWeight(index),
+        stressScore: getPairScenarioMetrics(index).stressScore,
         selected: state.selectedPairs.has(index),
       };
     });
@@ -531,6 +692,7 @@ function getScreenedRows(indices) {
     confidence: (left, right) => CONFIDENCE_SCORE[left.signal.confidence] - CONFIDENCE_SCORE[right.signal.confidence],
     modeledEdge: (left, right) => left.modeledEdge - right.modeledEdge,
     weight: (left, right) => left.weight - right.weight,
+    stressScore: (left, right) => left.stressScore - right.stressScore,
   };
 
   const sorter = sorters[state.screenerSort.key] || sorters.weight;
@@ -576,6 +738,42 @@ function getSelectedBookExportRows() {
     }));
 }
 
+function getConcentrationRows(indices) {
+  const portfolioRows = getPortfolioRows(indices);
+  if (!portfolioRows.length) {
+    return [];
+  }
+
+  const themeMap = new Map();
+
+  portfolioRows.forEach((row) => {
+    const tags = [...getPairTags(row.signal)];
+    tags.forEach((tag) => {
+      const current = themeMap.get(tag) || {
+        tag,
+        label: getThemeLabel(tag),
+        grossExposure: 0,
+        riskBudget: 0,
+        pairs: [],
+      };
+      current.grossExposure += row.grossExposure;
+      current.riskBudget += row.riskBudget;
+      current.pairs.push(row.pairLabel);
+      themeMap.set(tag, current);
+    });
+  });
+
+  const totalGross = portfolioRows.reduce((sum, row) => sum + row.grossExposure, 0);
+
+  return [...themeMap.values()]
+    .map((row) => ({
+      ...row,
+      overlapPct: totalGross > 0 ? row.grossExposure / totalGross : 0,
+      pairCount: row.pairs.length,
+    }))
+    .sort((left, right) => right.overlapPct - left.overlapPct);
+}
+
 function getSerializableState() {
   return {
     activeIndex: state.activeIndex,
@@ -586,6 +784,8 @@ function getSerializableState() {
     distortion: elements.distortionSlider.value,
     sizingMode: elements.sizingMode.value,
     stopBudgetInput: elements.stopBudgetInput.value,
+    regime: state.regime,
+    stress: elements.stressInput.value,
     screenerSort: { ...state.screenerSort },
   };
 }
@@ -716,9 +916,11 @@ function getActivePlan() {
   const { entryA, entryB } = sizedLegs;
   const targetA = parseDollar(signal.stockA.targetPrice);
   const targetB = parseDollar(signal.stockB.targetPrice);
-  const expectedReward =
+  const baseExpectedReward =
     sizedLegs.notionalA * getLegExpectedReturn(signal.stockA) +
     sizedLegs.notionalB * getLegExpectedReturn(signal.stockB);
+  const scenario = getPairScenarioMetrics(state.activeIndex);
+  const expectedReward = baseExpectedReward * (1 + scenario.edgeDelta) * (1 - scenario.breakRisk * 0.28);
   const rewardRisk = sizedLegs.actualRisk > 0 ? expectedReward / sizedLegs.actualRisk : 0;
   const sideAAction = getTradeSide(signal.stockA.direction);
   const sideBAction = getTradeSide(signal.stockB.direction);
@@ -742,6 +944,7 @@ function getActivePlan() {
     rewardRisk,
     hedgeSplit,
     maxHoldSessions,
+    scenario,
     sideA: {
       ticker: signal.stockA.ticker,
       action: sideAAction,
@@ -798,6 +1001,12 @@ function applySavedState(saved) {
   if (saved.screenerSort?.key && saved.screenerSort?.direction) {
     state.screenerSort = saved.screenerSort;
   }
+  if (saved.regime) {
+    state.regime = saved.regime;
+  }
+  if (saved.stress !== undefined) {
+    state.stress = clamp(Number(saved.stress) || 35, 0, 100);
+  }
 
   if (saved.capitalInput !== undefined) {
     elements.capitalInput.value = saved.capitalInput;
@@ -814,6 +1023,8 @@ function applySavedState(saved) {
   if (saved.stopBudgetInput !== undefined) {
     elements.stopBudgetInput.value = saved.stopBudgetInput;
   }
+  elements.regimeSelect.value = state.regime;
+  elements.stressInput.value = String(state.stress);
 
   elements.confidenceFilter.value = state.filters.confidence;
   elements.horizonFilter.value = state.filters.horizon;
@@ -1003,6 +1214,124 @@ function renderPortfolio() {
   elements.exportBook.disabled = false;
 }
 
+function renderConcentrationRadar() {
+  const selectedFiltered = getSelectedFilteredIndices();
+  const rows = getConcentrationRows(selectedFiltered);
+
+  if (!rows.length) {
+    elements.concentrationSummary.textContent = "No live book to measure";
+    elements.primaryTheme.textContent = "-";
+    elements.overlapScore.textContent = "0%";
+    elements.diversificationRead.textContent = "-";
+    elements.concentrationRows.innerHTML = '<p class="empty-note">Add pairs to the book to inspect theme crowding.</p>';
+    return;
+  }
+
+  const primary = rows[0];
+  const overlapScore = rows.slice(0, 3).reduce((sum, row) => sum + row.overlapPct, 0);
+  const diversificationRead =
+    overlapScore >= 1.35 ? "Crowded" : overlapScore >= 1 ? "Balanced with tilt" : "Diversified";
+
+  elements.concentrationSummary.textContent = `${rows.length} recurring themes detected across ${selectedFiltered.length} live pairs`;
+  elements.primaryTheme.textContent = primary.label;
+  elements.overlapScore.textContent = formatPercent(overlapScore, 0);
+  elements.diversificationRead.textContent = diversificationRead;
+  elements.concentrationRows.innerHTML = rows
+    .map((row) => `
+      <article class="concentration-row">
+        <div class="concentration-row-head">
+          <div>
+            <h4>${row.label}</h4>
+            <p>${row.pairCount} pair${row.pairCount === 1 ? "" : "s"} exposed</p>
+          </div>
+          <strong>${formatPercent(row.overlapPct, 0)}</strong>
+        </div>
+        <div class="concentration-bar">
+          <div class="concentration-fill" style="width: ${Math.max(row.overlapPct * 100, 6)}%"></div>
+        </div>
+        <p class="concentration-meta">${formatMoney(row.grossExposure)} gross exposure across ${row.pairs.join(", ")}</p>
+      </article>
+    `)
+    .join("");
+}
+
+function renderScenarioStudio() {
+  const selectedFiltered = getSelectedFilteredIndices();
+  const profile = getRegimeProfile();
+  const intensity = getStressIntensity();
+  elements.stressValue.textContent = `${Math.round(intensity * 100)}% intensity`;
+
+  if (!selectedFiltered.length) {
+    elements.scenarioNarrative.textContent = `${profile.label} is selected, but there is no live book in the current filter scope to stress.`;
+    elements.scenarioExpectedPnL.textContent = formatMoney(0);
+    elements.scenarioConfidenceDrag.textContent = "0 bps";
+    elements.scenarioBreakRisk.textContent = "0%";
+    elements.scenarioWeakestPair.textContent = "-";
+    elements.scenarioRows.innerHTML = '<p class="empty-note">Add pairs to the book to see stressed outcomes.</p>';
+    return;
+  }
+
+  const rows = getPortfolioRows(selectedFiltered)
+    .map((row) => {
+      const scenario = getPairScenarioMetrics(row.index);
+      const stressedPnL = row.expectedPnL * (1 - scenario.breakRisk * 0.55) * (1 - scenario.confidencePenalty * 0.25);
+      return {
+        ...row,
+        scenario,
+        stressedPnL,
+      };
+    })
+    .sort((left, right) => right.stressedPnL - left.stressedPnL);
+
+  const totalStressedPnL = rows.reduce((sum, row) => sum + row.stressedPnL, 0);
+  const averageConfidenceDrag = rows.reduce((sum, row) => sum + row.scenario.confidencePenalty, 0) / rows.length;
+  const averageBreakRisk = rows.reduce((sum, row) => sum + row.scenario.breakRisk, 0) / rows.length;
+  const weakest = rows.reduce((current, row) => (row.stressedPnL < current.stressedPnL ? row : current), rows[0]);
+
+  elements.scenarioNarrative.textContent = `${profile.narrative} At ${Math.round(
+    intensity * 100
+  )}% intensity, the range below shows which live pairs keep their edge and which ones start breaking character.`;
+  elements.scenarioExpectedPnL.textContent = formatSignedMoney(totalStressedPnL);
+  elements.scenarioConfidenceDrag.textContent = `${(averageConfidenceDrag * 100).toFixed(0)} bps`;
+  elements.scenarioBreakRisk.textContent = formatPercent(averageBreakRisk, 0);
+  elements.scenarioWeakestPair.textContent = weakest ? weakest.pairLabel : "-";
+  elements.scenarioRows.innerHTML = rows
+    .map((row) => {
+      const scoreClass =
+        row.scenario.stressScore >= 0.66 ? "is-strong" : row.scenario.stressScore >= 0.48 ? "is-mixed" : "is-fragile";
+      return `
+        <article class="scenario-row ${scoreClass}">
+          <div class="scenario-row-head">
+            <div>
+              <p class="section-label">Stress Fit</p>
+              <h3>${row.pairLabel}</h3>
+            </div>
+            <span class="scenario-score">${Math.round(row.scenario.stressScore * 100)}</span>
+          </div>
+          <div class="scenario-metrics">
+            <div>
+              <span>Base P/L</span>
+              <strong>${formatSignedMoney(row.expectedPnL)}</strong>
+            </div>
+            <div>
+              <span>Stressed P/L</span>
+              <strong>${formatSignedMoney(row.stressedPnL)}</strong>
+            </div>
+            <div>
+              <span>Break risk</span>
+              <strong>${formatPercent(row.scenario.breakRisk, 0)}</strong>
+            </div>
+            <div>
+              <span>Confidence drag</span>
+              <strong>${(row.scenario.confidencePenalty * 100).toFixed(0)} bps</strong>
+            </div>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+}
+
 function renderScreener() {
   const filtered = getFilteredIndices();
   const rows = getScreenedRows(filtered);
@@ -1017,7 +1346,7 @@ function renderScreener() {
     elements.exportBook.disabled = getSelectedFilteredIndices().length === 0;
     elements.screenerRows.innerHTML = `
       <tr>
-        <td colspan="8" class="empty-note">Adjust the filters to surface more pair candidates.</td>
+        <td colspan="9" class="empty-note">Adjust the filters to surface more pair candidates.</td>
       </tr>
     `;
     return;
@@ -1028,7 +1357,9 @@ function renderScreener() {
       ? "Confidence"
       : button.dataset.sortKey === "modeledEdge"
         ? "Modeled Edge"
-        : "Book Weight";
+        : button.dataset.sortKey === "weight"
+          ? "Book Weight"
+          : "Stress Fit";
     button.textContent = buildSortLabel(button.dataset.sortKey, label);
   });
 
@@ -1044,6 +1375,7 @@ function renderScreener() {
           <td>${row.signal.timePeriod}</td>
           <td>${formatPercent(row.modeledEdge, 1)}</td>
           <td>${formatPercent(normalizedWeight, 1)}</td>
+          <td>${formatPercent(row.stressScore, 0)}</td>
           <td><span class="table-status ${row.selected ? "is-selected" : "is-watch"}">${row.selected ? "In book" : "Watchlist"}</span></td>
           <td>
             <div class="table-actions">
@@ -1124,7 +1456,9 @@ function renderExecutionPlanner() {
 
   elements.planNarrative.textContent = `${plan.signal.pair[0]} / ${plan.signal.pair[1]} ${
     plan.isLive ? "already sits inside the current book" : "is currently out of book"
-  }, so the planner ${plan.isLive ? "sizes the live trade" : "shows the ticket you would run if added now"}. With a ${formatPercent(
+  }, so the planner ${plan.isLive ? "sizes the live trade" : "shows the ticket you would run if added now"}. Under the ${
+    getRegimeProfile().label.toLowerCase()
+  } regime, the setup carries about ${formatPercent(plan.scenario.breakRisk, 0)} break risk. With a ${formatPercent(
     getBudgetInputs().stopBudgetPct,
     1
   )} stop budget and ${plan.sizingLabel.toLowerCase()} construction, the sized ticket uses ${formatMoney(
@@ -1137,10 +1471,12 @@ function renderExecutionPlanner() {
 
 function renderAll() {
   renderTabs();
+  renderScenarioStudio();
   renderSignal();
   renderDistortion();
   renderSelectionToggle();
   renderPortfolio();
+  renderConcentrationRadar();
   renderExecutionPlanner();
   renderScreener();
   persistState();
@@ -1179,6 +1515,16 @@ elements.horizonFilter.addEventListener("change", () => {
 });
 
 elements.sizingMode.addEventListener("change", () => {
+  renderAll();
+});
+
+elements.regimeSelect.addEventListener("change", () => {
+  state.regime = elements.regimeSelect.value;
+  renderAll();
+});
+
+elements.stressInput.addEventListener("input", () => {
+  state.stress = clamp(Number(elements.stressInput.value) || 35, 0, 100);
   renderAll();
 });
 

@@ -11,6 +11,7 @@ This project is now a portfolio-oriented ETF pair strategy viewer.
 - Added sortable screener columns and CSV export for the selected book.
 - Added shareable snapshot links that recreate the current filters, sizing inputs, active pair, distortion, and selected book from the URL.
 - Added portfolio-level metrics: selected count, deployed risk, expected P/L, and average confidence.
+- Added a regime stress studio with macro presets, intensity control, stressed book ranges, and stress-fit scoring inside the screener.
 - Kept the original pair relationship and distortion engine, and wired distortion into allocation weighting.
 
 ## Run

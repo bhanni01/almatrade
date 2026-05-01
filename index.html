@@ -65,6 +65,20 @@
               <span>Stop budget (% of gross exposure)</span>
               <input id="stopBudgetInput" type="number" min="0.5" max="10" step="0.1" value="2.2" />
             </label>
+            <label class="field">
+              <span>Market regime</span>
+              <select id="regimeSelect">
+                <option value="balanced">Balanced tape</option>
+                <option value="riskOff">Risk-off flush</option>
+                <option value="riskOn">Risk-on chase</option>
+                <option value="inflation">Inflation shock</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Stress intensity</span>
+              <input id="stressInput" type="range" min="0" max="100" step="5" value="35" />
+              <small id="stressValue" class="field-note"></small>
+            </label>
           </div>
         </article>
 
@@ -98,6 +112,37 @@
       </section>
 
       <section id="pairTabs" class="pair-tabs"></section>
+
+      <section class="scenario-card">
+        <div class="scenario-head">
+          <div>
+            <p class="section-label">Regime Stress Studio</p>
+            <h2>Book range by market tape</h2>
+          </div>
+          <p id="scenarioNarrative" class="scenario-narrative"></p>
+        </div>
+
+        <div class="scenario-summary">
+          <div>
+            <span>Stressed book P/L</span>
+            <strong id="scenarioExpectedPnL"></strong>
+          </div>
+          <div>
+            <span>Confidence drag</span>
+            <strong id="scenarioConfidenceDrag"></strong>
+          </div>
+          <div>
+            <span>Break risk</span>
+            <strong id="scenarioBreakRisk"></strong>
+          </div>
+          <div>
+            <span>Most exposed pair</span>
+            <strong id="scenarioWeakestPair"></strong>
+          </div>
+        </div>
+
+        <div id="scenarioRows" class="scenario-grid"></div>
+      </section>
 
       <section class="relation-card">
         <div class="relation-head">
@@ -337,6 +382,33 @@
         </div>
       </section>
 
+      <section class="portfolio-card concentration-card">
+        <div class="portfolio-head">
+          <div>
+            <p class="section-label">Concentration Radar</p>
+            <h3>Theme overlap across the live book</h3>
+          </div>
+          <p id="concentrationSummary" class="screener-summary"></p>
+        </div>
+        <div class="concentration-grid">
+          <div class="concentration-overview">
+            <div>
+              <span>Primary crowding</span>
+              <strong id="primaryTheme"></strong>
+            </div>
+            <div>
+              <span>Overlap score</span>
+              <strong id="overlapScore"></strong>
+            </div>
+            <div>
+              <span>Diversification read</span>
+              <strong id="diversificationRead"></strong>
+            </div>
+          </div>
+          <div id="concentrationRows" class="concentration-rows"></div>
+        </div>
+      </section>
+
       <section class="portfolio-card">
         <div class="portfolio-head">
           <div>
@@ -355,6 +427,7 @@
                 <th>Horizon</th>
                 <th><button class="sort-button" type="button" data-sort-key="modeledEdge">Modeled Edge</button></th>
                 <th><button class="sort-button" type="button" data-sort-key="weight">Book Weight</button></th>
+                <th><button class="sort-button" type="button" data-sort-key="stressScore">Stress Fit</button></th>
                 <th>Status</th>
                 <th>Action</th>
               </tr>
