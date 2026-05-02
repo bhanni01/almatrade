@@ -230,6 +230,8 @@ const elements = {
   regimeSelect: document.querySelector("#regimeSelect"),
   stressInput: document.querySelector("#stressInput"),
   stressValue: document.querySelector("#stressValue"),
+  targetPairsInput: document.querySelector("#targetPairsInput"),
+  themeCapInput: document.querySelector("#themeCapInput"),
   selectedCount: document.querySelector("#selectedCount"),
   riskDeployed: document.querySelector("#riskDeployed"),
   expectedPnL: document.querySelector("#expectedPnL"),
@@ -247,6 +249,12 @@ const elements = {
   overlapScore: document.querySelector("#overlapScore"),
   diversificationRead: document.querySelector("#diversificationRead"),
   concentrationRows: document.querySelector("#concentrationRows"),
+  autoBuildBook: document.querySelector("#autoBuildBook"),
+  builderRoster: document.querySelector("#builderRoster"),
+  builderScore: document.querySelector("#builderScore"),
+  builderTradeoff: document.querySelector("#builderTradeoff"),
+  builderNarrative: document.querySelector("#builderNarrative"),
+  builderChecklist: document.querySelector("#builderChecklist"),
   allocationRows: document.querySelector("#allocationRows"),
   exportBook: document.querySelector("#exportBook"),
   toggleCurrentPair: document.querySelector("#toggleCurrentPair"),
@@ -774,6 +782,86 @@ function getConcentrationRows(indices) {
     .sort((left, right) => right.overlapPct - left.overlapPct);
 }
 
+function getBuilderConstraints() {
+  return {
+    targetPairs: clamp(Number(elements.targetPairsInput.value) || 4, 1, PAIR_SIGNALS.length),
+    themeCap: clamp((Number(elements.themeCapInput.value) || 55) / 100, 0.25, 0.9),
+  };
+}
+
+function getRecommendedBook() {
+  const filtered = getFilteredIndices();
+  const candidates = getScreenedRows(filtered).slice().sort((left, right) => right.weight - left.weight);
+  const { targetPairs, themeCap } = getBuilderConstraints();
+  const chosen = [];
+  const skipped = [];
+  const themeCounts = new Map();
+
+  const canAddCandidate = (candidate, allowSoftCap = false) => {
+    const nextCount = chosen.length + 1;
+    const tags = [...getPairTags(candidate.signal)];
+
+    return tags.every((tag) => {
+      const currentCount = themeCounts.get(tag) || 0;
+      const nextShare = (currentCount + 1) / nextCount;
+      return allowSoftCap || nextShare <= themeCap;
+    });
+  };
+
+  candidates.forEach((candidate) => {
+    if (chosen.length >= targetPairs) {
+      return;
+    }
+
+    if (canAddCandidate(candidate)) {
+      chosen.push(candidate);
+      [...getPairTags(candidate.signal)].forEach((tag) => {
+        themeCounts.set(tag, (themeCounts.get(tag) || 0) + 1);
+      });
+      return;
+    }
+
+    skipped.push(candidate);
+  });
+
+  if (chosen.length < targetPairs) {
+    skipped.forEach((candidate) => {
+      if (chosen.length >= targetPairs) {
+        return;
+      }
+      if (chosen.some((row) => row.index === candidate.index)) {
+        return;
+      }
+      if (canAddCandidate(candidate, true)) {
+        chosen.push(candidate);
+        [...getPairTags(candidate.signal)].forEach((tag) => {
+          themeCounts.set(tag, (themeCounts.get(tag) || 0) + 1);
+        });
+      }
+    });
+  }
+
+  const chosenIndices = chosen.map((row) => row.index);
+  const concentration = getConcentrationRows(chosenIndices);
+  const scoreBase = chosen.reduce((sum, row) => sum + row.weight * (0.55 + row.stressScore * 0.45), 0);
+  const overlapPenalty = concentration.slice(0, 2).reduce((sum, row) => sum + row.overlapPct, 0) * 18;
+  const qualityScore = clamp(scoreBase * 8 - overlapPenalty, 0, 100);
+  const topSkipped = skipped[0] || null;
+  const primaryCrowding = concentration[0] || null;
+
+  return {
+    chosen,
+    chosenIndices,
+    skipped,
+    concentration,
+    qualityScore,
+    primaryCrowding,
+    topSkipped,
+    themeCap,
+    targetPairs,
+  };
+}
+
 function getSerializableState() {
   return {
     activeIndex: state.activeIndex,
@@ -786,6 +874,8 @@ function getSerializableState() {
     stopBudgetInput: elements.stopBudgetInput.value,
     regime: state.regime,
     stress: elements.stressInput.value,
+    targetPairsInput: elements.targetPairsInput.value,
+    themeCapInput: elements.themeCapInput.value,
     screenerSort: { ...state.screenerSort },
   };
 }
@@ -1023,6 +1113,12 @@ function applySavedState(saved) {
   if (saved.stopBudgetInput !== undefined) {
     elements.stopBudgetInput.value = saved.stopBudgetInput;
   }
+  if (saved.targetPairsInput !== undefined) {
+    elements.targetPairsInput.value = saved.targetPairsInput;
+  }
+  if (saved.themeCapInput !== undefined) {
+    elements.themeCapInput.value = saved.themeCapInput;
+  }
   elements.regimeSelect.value = state.regime;
   elements.stressInput.value = String(state.stress);
 
@@ -1255,6 +1351,57 @@ function renderConcentrationRadar() {
     .join("");
 }
 
+function renderBuilder() {
+  const recommendation = getRecommendedBook();
+  const roster = recommendation.chosen.map((row) => row.pairLabel);
+
+  if (!roster.length) {
+    elements.builderRoster.textContent = "-";
+    elements.builderScore.textContent = "0";
+    elements.builderTradeoff.textContent = "-";
+    elements.builderNarrative.textContent = "The current filters leave the builder with no valid candidates.";
+    elements.builderChecklist.innerHTML = '<li>Loosen the confidence or horizon filters to produce a buildable roster.</li>';
+    elements.autoBuildBook.disabled = true;
+    return;
+  }
+
+  const crowding = recommendation.primaryCrowding
+    ? `${recommendation.primaryCrowding.label} at ${formatPercent(recommendation.primaryCrowding.overlapPct, 0)}`
+    : "No meaningful crowding";
+  const topIdea = recommendation.chosen[0];
+  const builderNotes = [
+    `Lead with ${topIdea.pairLabel}. It carries the strongest combined book weight and regime-adjusted fit in the filtered universe.`,
+    `The builder stops at ${recommendation.targetPairs} pair${recommendation.targetPairs === 1 ? "" : "s"} and tries to keep any one theme under ${formatPercent(recommendation.themeCap, 0)} overlap.`,
+    recommendation.topSkipped
+      ? `Highest-quality skip: ${recommendation.topSkipped.pairLabel}. It was left out to avoid stacking more of the same macro sleeve into the book.`
+      : "No high-ranking candidate was forced out by the diversification rules.",
+    recommendation.primaryCrowding
+      ? `Primary residual crowding is still ${crowding.toLowerCase()}, so that is the sleeve to monitor first if the book starts moving as one trade.`
+      : "The proposed roster is relatively balanced across the current theme map.",
+  ];
+
+  elements.builderRoster.textContent = roster.join(", ");
+  elements.builderScore.textContent = `${Math.round(recommendation.qualityScore)}/100`;
+  elements.builderTradeoff.textContent = recommendation.topSkipped ? recommendation.topSkipped.pairLabel : "None";
+  elements.builderNarrative.textContent = `This builder behaves like a PM assistant: it starts with the highest-quality screened pairs, then refuses additional names when they crowd the same theme too aggressively. The result is a book that is still return-seeking, but less likely to be a disguised one-factor bet.`;
+  elements.builderChecklist.innerHTML = builderNotes.map((item) => `<li>${item}</li>`).join("");
+  elements.autoBuildBook.disabled = false;
+}
+
+function autoBuildBook() {
+  const recommendation = getRecommendedBook();
+  state.selectedPairs = new Set(recommendation.chosenIndices);
+
+  if (recommendation.chosenIndices.length) {
+    state.activeIndex = recommendation.chosenIndices[0];
+    setShareFeedback(`Built ${recommendation.chosenIndices.length} pair book from current filters.`);
+  } else {
+    setShareFeedback("Builder found no valid roster for the current filters.", true);
+  }
+
+  renderAll();
+}
+
 function renderScenarioStudio() {
   const selectedFiltered = getSelectedFilteredIndices();
   const profile = getRegimeProfile();
@@ -1477,6 +1624,7 @@ function renderAll() {
   renderSelectionToggle();
   renderPortfolio();
   renderConcentrationRadar();
+  renderBuilder();
   renderExecutionPlanner();
   renderScreener();
   persistState();
@@ -1508,7 +1656,7 @@ elements.horizonFilter.addEventListener("change", () => {
   renderAll();
 });
 
-[elements.capitalInput, elements.riskInput, elements.stopBudgetInput].forEach((input) => {
+[elements.capitalInput, elements.riskInput, elements.stopBudgetInput, elements.targetPairsInput, elements.themeCapInput].forEach((input) => {
   input.addEventListener("input", () => {
     renderAll();
   });
@@ -1534,6 +1682,10 @@ elements.exportBook.addEventListener("click", () => {
 
 elements.shareSnapshot.addEventListener("click", () => {
   copySnapshotLink();
+});
+
+elements.autoBuildBook.addEventListener("click", () => {
+  autoBuildBook();
 });
 
 document.querySelectorAll(".sort-button").forEach((button) => {

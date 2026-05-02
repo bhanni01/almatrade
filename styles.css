@@ -859,6 +859,46 @@ th {
   line-height: 1.6;
 }
 
+.builder-card {
+  padding: 22px;
+}
+
+.builder-grid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 16px;
+}
+
+.builder-summary {
+  display: grid;
+  gap: 12px;
+}
+
+.builder-summary div {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at right top, rgba(20, 122, 85, 0.08), transparent 42%),
+    rgba(255, 255, 255, 0.78);
+}
+
+.builder-summary span {
+  color: var(--muted);
+}
+
+.builder-summary strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 1.1rem;
+  line-height: 1.4;
+}
+
+.builder-notes {
+  margin-top: 0;
+}
+
 @media (max-width: 900px) {
   .config-grid,
   .scenario-summary,
@@ -873,7 +913,8 @@ th {
   .execution-summary,
   .scenario-grid,
   .scenario-metrics,
-  .concentration-grid {
+  .concentration-grid,
+  .builder-grid {
     grid-template-columns: 1fr;
   }
 

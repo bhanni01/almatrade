@@ -79,6 +79,15 @@
               <input id="stressInput" type="range" min="0" max="100" step="5" value="35" />
               <small id="stressValue" class="field-note"></small>
             </label>
+            <label class="field">
+              <span>Target live pairs</span>
+              <input id="targetPairsInput" type="number" min="1" max="7" step="1" value="4" />
+            </label>
+            <label class="field">
+              <span>Theme overlap cap (%)</span>
+              <input id="themeCapInput" type="number" min="25" max="90" step="5" value="55" />
+              <small class="field-note">Used by the auto-builder to avoid a crowded book.</small>
+            </label>
           </div>
         </article>
 
@@ -406,6 +415,38 @@
             </div>
           </div>
           <div id="concentrationRows" class="concentration-rows"></div>
+        </div>
+      </section>
+
+      <section class="portfolio-card builder-card">
+        <div class="portfolio-head">
+          <div>
+            <p class="section-label">Book Builder</p>
+            <h3>Auto-construct a cleaner portfolio</h3>
+          </div>
+          <div class="portfolio-actions">
+            <button id="autoBuildBook" class="toggle-button" type="button">Build Best Book</button>
+          </div>
+        </div>
+        <div class="builder-grid">
+          <div class="builder-summary">
+            <div>
+              <span>Recommended roster</span>
+              <strong id="builderRoster"></strong>
+            </div>
+            <div>
+              <span>Quality score</span>
+              <strong id="builderScore"></strong>
+            </div>
+            <div>
+              <span>Main compromise</span>
+              <strong id="builderTradeoff"></strong>
+            </div>
+          </div>
+          <div class="planner-notes builder-notes">
+            <p id="builderNarrative" class="shock-narrative"></p>
+            <ul id="builderChecklist" class="checklist"></ul>
+          </div>
         </div>
       </section>
 
