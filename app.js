@@ -191,6 +191,10 @@ const state = {
   },
   regime: "balanced",
   stress: 35,
+  plotAxes: {
+    x: "modeledEdge",
+    y: "stressScore",
+  },
 };
 
 const elements = {
@@ -255,6 +259,10 @@ const elements = {
   builderTradeoff: document.querySelector("#builderTradeoff"),
   builderNarrative: document.querySelector("#builderNarrative"),
   builderChecklist: document.querySelector("#builderChecklist"),
+  plotSummary: document.querySelector("#plotSummary"),
+  plotXSelect: document.querySelector("#plotXSelect"),
+  plotYSelect: document.querySelector("#plotYSelect"),
+  crossSectionPlot: document.querySelector("#crossSectionPlot"),
   allocationRows: document.querySelector("#allocationRows"),
   exportBook: document.querySelector("#exportBook"),
   toggleCurrentPair: document.querySelector("#toggleCurrentPair"),
@@ -318,6 +326,15 @@ function formatSessions(value) {
 
 function formatSignedMoney(value) {
   return `${value >= 0 ? "+" : "-"}${formatMoney(Math.abs(value))}`;
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
 function encodeSnapshot(payload) {
@@ -746,6 +763,82 @@ function getSelectedBookExportRows() {
     }));
 }
 
+function getPlotMetricConfig() {
+  return {
+    modeledEdge: {
+      label: "Modeled edge",
+      format: (value) => formatPercent(value, 1),
+    },
+    stressScore: {
+      label: "Stress fit",
+      format: (value) => formatPercent(value, 0),
+    },
+    breakRisk: {
+      label: "Break risk",
+      format: (value) => formatPercent(value, 0),
+    },
+    riskBudget: {
+      label: "Risk budget",
+      format: (value) => formatMoney(value),
+    },
+    grossExposure: {
+      label: "Gross exposure",
+      format: (value) => formatMoney(value),
+    },
+  };
+}
+
+function mixColor(start, end, weight) {
+  const ratio = clamp(weight, 0, 1);
+  const mixed = start.map((channel, index) => Math.round(channel + (end[index] - channel) * ratio));
+  return `rgb(${mixed[0]}, ${mixed[1]}, ${mixed[2]})`;
+}
+
+function getViridisColor(value) {
+  const stops = [
+    { at: 0, color: [68, 1, 84] },
+    { at: 0.25, color: [59, 82, 139] },
+    { at: 0.5, color: [33, 145, 140] },
+    { at: 0.75, color: [94, 201, 98] },
+    { at: 1, color: [253, 231, 37] },
+  ];
+
+  const safeValue = clamp(value, 0, 1);
+  for (let index = 1; index < stops.length; index += 1) {
+    const left = stops[index - 1];
+    const right = stops[index];
+    if (safeValue <= right.at) {
+      const localRatio = (safeValue - left.at) / (right.at - left.at);
+      return mixColor(left.color, right.color, localRatio);
+    }
+  }
+
+  return mixColor(stops[stops.length - 2].color, stops[stops.length - 1].color, 1);
+}
+
+function getPlotRows(indices) {
+  const portfolioMap = new Map(getPortfolioRows(indices).map((row) => [row.index, row]));
+  return getScreenedRows(indices).map((row) => {
+    const scenario = getPairScenarioMetrics(row.index);
+    const portfolioRow = portfolioMap.get(row.index);
+    return {
+      ...row,
+      breakRisk: scenario.breakRisk,
+      riskBudget: portfolioRow?.riskBudget || 0,
+      grossExposure: portfolioRow?.grossExposure || 0,
+      weightPct: portfolioRow?.weightPct || 0,
+    };
+  });
+}
+
+function buildTicks(min, max, count = 5) {
+  if (min === max) {
+    return [min];
+  }
+
+  return Array.from({ length: count }, (_, index) => min + ((max - min) * index) / (count - 1));
+}
+
 function getConcentrationRows(indices) {
   const portfolioRows = getPortfolioRows(indices);
   if (!portfolioRows.length) {
@@ -876,6 +969,7 @@ function getSerializableState() {
     stress: elements.stressInput.value,
     targetPairsInput: elements.targetPairsInput.value,
     themeCapInput: elements.themeCapInput.value,
+    plotAxes: { ...state.plotAxes },
     screenerSort: { ...state.screenerSort },
   };
 }
@@ -1091,6 +1185,9 @@ function applySavedState(saved) {
   if (saved.screenerSort?.key && saved.screenerSort?.direction) {
     state.screenerSort = saved.screenerSort;
   }
+  if (saved.plotAxes?.x && saved.plotAxes?.y) {
+    state.plotAxes = saved.plotAxes;
+  }
   if (saved.regime) {
     state.regime = saved.regime;
   }
@@ -1121,6 +1218,8 @@ function applySavedState(saved) {
   }
   elements.regimeSelect.value = state.regime;
   elements.stressInput.value = String(state.stress);
+  elements.plotXSelect.value = state.plotAxes.x;
+  elements.plotYSelect.value = state.plotAxes.y;
 
   elements.confidenceFilter.value = state.filters.confidence;
   elements.horizonFilter.value = state.filters.horizon;
@@ -1388,6 +1487,110 @@ function renderBuilder() {
   elements.autoBuildBook.disabled = false;
 }
 
+function renderCrossSectionPlot() {
+  const filtered = getFilteredIndices();
+  const rows = getPlotRows(filtered);
+  const metricConfig = getPlotMetricConfig();
+  const xKey = state.plotAxes.x;
+  const yKey = state.plotAxes.y;
+
+  if (!rows.length || !metricConfig[xKey] || !metricConfig[yKey]) {
+    elements.plotSummary.textContent = "No data available for the current filters";
+    elements.crossSectionPlot.innerHTML = "";
+    return;
+  }
+
+  const xValues = rows.map((row) => row[xKey]);
+  const yValues = rows.map((row) => row[yKey]);
+  const xMin = Math.min(...xValues);
+  const xMax = Math.max(...xValues);
+  const yMin = Math.min(...yValues);
+  const yMax = Math.max(...yValues);
+  const xPadding = xMin === xMax ? Math.max(Math.abs(xMin) * 0.1, 1) : (xMax - xMin) * 0.12;
+  const yPadding = yMin === yMax ? Math.max(Math.abs(yMin) * 0.1, 1) : (yMax - yMin) * 0.12;
+  const domain = {
+    left: xMin - xPadding,
+    right: xMax + xPadding,
+    bottom: yMin - yPadding,
+    top: yMax + yPadding,
+  };
+
+  const frame = { left: 92, right: 820, top: 34, bottom: 432 };
+  const plotWidth = frame.right - frame.left;
+  const plotHeight = frame.bottom - frame.top;
+  const mapX = (value) => frame.left + ((value - domain.left) / Math.max(domain.right - domain.left, 0.0001)) * plotWidth;
+  const mapY = (value) => frame.bottom - ((value - domain.bottom) / Math.max(domain.top - domain.bottom, 0.0001)) * plotHeight;
+  const xTicks = buildTicks(domain.left, domain.right, 5);
+  const yTicks = buildTicks(domain.bottom, domain.top, 5);
+  const highestWeight = Math.max(...rows.map((row) => row.weight || 0), 0.0001);
+  const highlighted = rows.reduce((best, row) => (!best || row.weight > best.weight ? row : best), null);
+
+  const gridX = xTicks
+    .map((tick) => {
+      const x = mapX(tick);
+      return `<g><line x1="${x}" y1="${frame.top}" x2="${x}" y2="${frame.bottom}" class="plot-grid-line"></line><text x="${x}" y="460" class="plot-tick">${escapeHtml(metricConfig[xKey].format(tick))}</text></g>`;
+    })
+    .join("");
+  const gridY = yTicks
+    .map((tick) => {
+      const y = mapY(tick);
+      return `<g><line x1="${frame.left}" y1="${y}" x2="${frame.right}" y2="${y}" class="plot-grid-line"></line><text x="76" y="${y + 4}" class="plot-tick plot-tick-left">${escapeHtml(metricConfig[yKey].format(tick))}</text></g>`;
+    })
+    .join("");
+  const points = rows
+    .map((row) => {
+      const cx = mapX(row[xKey]);
+      const cy = mapY(row[yKey]);
+      const radius = 8 + (row.weight / highestWeight) * 14;
+      const color = getViridisColor(row.stressScore);
+      const stroke = row.selected ? "#181511" : "rgba(24, 21, 17, 0.28)";
+      return `
+        <g class="plot-point ${row.selected ? "is-selected" : ""} ${row.index === state.activeIndex ? "is-active" : ""}">
+          <circle cx="${cx}" cy="${cy}" r="${radius}" fill="${color}" stroke="${stroke}" stroke-width="${row.index === state.activeIndex ? 3 : 1.5}" opacity="0.9"></circle>
+          <text x="${cx}" y="${cy - radius - 8}" class="plot-label">${escapeHtml(row.signal.pair[0])}/${escapeHtml(row.signal.pair[1])}</text>
+          <title>${row.pairLabel}
+${metricConfig[xKey].label}: ${metricConfig[xKey].format(row[xKey])}
+${metricConfig[yKey].label}: ${metricConfig[yKey].format(row[yKey])}
+Stress fit: ${formatPercent(row.stressScore, 0)}
+Status: ${row.selected ? "In book" : "Watchlist"}</title>
+        </g>
+      `;
+    })
+    .join("");
+
+  elements.plotSummary.textContent = `${rows.length} pairs shown. Color maps stress fit, marker size maps modeled book weight, and the darkest outline marks the active pair.`;
+  elements.crossSectionPlot.innerHTML = `
+    <defs>
+      <linearGradient id="viridisBar" x1="0%" x2="100%" y1="0%" y2="0%">
+        <stop offset="0%" stop-color="${getViridisColor(0)}"></stop>
+        <stop offset="25%" stop-color="${getViridisColor(0.25)}"></stop>
+        <stop offset="50%" stop-color="${getViridisColor(0.5)}"></stop>
+        <stop offset="75%" stop-color="${getViridisColor(0.75)}"></stop>
+        <stop offset="100%" stop-color="${getViridisColor(1)}"></stop>
+      </linearGradient>
+    </defs>
+    <rect x="${frame.left}" y="${frame.top}" width="${plotWidth}" height="${plotHeight}" rx="20" class="plot-panel"></rect>
+    ${gridX}
+    ${gridY}
+    <line x1="${frame.left}" y1="${frame.bottom}" x2="${frame.right}" y2="${frame.bottom}" class="plot-axis"></line>
+    <line x1="${frame.left}" y1="${frame.top}" x2="${frame.left}" y2="${frame.bottom}" class="plot-axis"></line>
+    ${points}
+    <text x="${(frame.left + frame.right) / 2}" y="500" class="plot-axis-label">${escapeHtml(metricConfig[xKey].label)}</text>
+    <text x="28" y="${(frame.top + frame.bottom) / 2}" class="plot-axis-label plot-axis-label-vertical">${escapeHtml(metricConfig[yKey].label)}</text>
+    <g transform="translate(690 472)">
+      <rect x="0" y="0" width="140" height="12" rx="999" fill="url(#viridisBar)"></rect>
+      <text x="0" y="-8" class="plot-legend-label">Stress fit</text>
+      <text x="0" y="30" class="plot-legend-tick">Low</text>
+      <text x="122" y="30" class="plot-legend-tick">High</text>
+    </g>
+    ${
+      highlighted
+        ? `<text x="${frame.left}" y="20" class="plot-highlight">Highest weight: ${escapeHtml(highlighted.pairLabel)}</text>`
+        : ""
+    }
+  `;
+}
+
 function autoBuildBook() {
   const recommendation = getRecommendedBook();
   state.selectedPairs = new Set(recommendation.chosenIndices);
@@ -1625,6 +1828,7 @@ function renderAll() {
   renderPortfolio();
   renderConcentrationRadar();
   renderBuilder();
+  renderCrossSectionPlot();
   renderExecutionPlanner();
   renderScreener();
   persistState();
@@ -1674,6 +1878,14 @@ elements.regimeSelect.addEventListener("change", () => {
 elements.stressInput.addEventListener("input", () => {
   state.stress = clamp(Number(elements.stressInput.value) || 35, 0, 100);
   renderAll();
+});
+
+[elements.plotXSelect, elements.plotYSelect].forEach((select) => {
+  select.addEventListener("change", () => {
+    state.plotAxes.x = elements.plotXSelect.value;
+    state.plotAxes.y = elements.plotYSelect.value;
+    renderAll();
+  });
 });
 
 elements.exportBook.addEventListener("click", () => {

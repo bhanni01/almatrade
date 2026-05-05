@@ -450,6 +450,41 @@
         </div>
       </section>
 
+      <section class="portfolio-card plot-card">
+        <div class="portfolio-head">
+          <div>
+            <p class="section-label">Matplotlib View</p>
+            <h3>Cross-section plot of the filtered universe</h3>
+          </div>
+          <p id="plotSummary" class="screener-summary"></p>
+        </div>
+        <div class="plot-toolbar">
+          <label class="field">
+            <span>X-axis</span>
+            <select id="plotXSelect">
+              <option value="modeledEdge">Modeled edge</option>
+              <option value="stressScore">Stress fit</option>
+              <option value="breakRisk">Break risk</option>
+              <option value="riskBudget">Risk budget</option>
+              <option value="grossExposure">Gross exposure</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Y-axis</span>
+            <select id="plotYSelect">
+              <option value="stressScore">Stress fit</option>
+              <option value="modeledEdge">Modeled edge</option>
+              <option value="breakRisk">Break risk</option>
+              <option value="riskBudget">Risk budget</option>
+              <option value="grossExposure">Gross exposure</option>
+            </select>
+          </label>
+        </div>
+        <div class="plot-frame">
+          <svg id="crossSectionPlot" class="cross-section-plot" viewBox="0 0 920 520" role="img" aria-label="Pair cross-section plot"></svg>
+        </div>
+      </section>
+
       <section class="portfolio-card">
         <div class="portfolio-head">
           <div>
