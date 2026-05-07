@@ -195,6 +195,11 @@ const state = {
     x: "modeledEdge",
     y: "stressScore",
   },
+  monte: {
+    trials: 2000,
+    noisePct: 80,
+    seed: 1337,
+  },
 };
 
 const elements = {
@@ -268,6 +273,19 @@ const elements = {
   toggleCurrentPair: document.querySelector("#toggleCurrentPair"),
   screenerSummary: document.querySelector("#screenerSummary"),
   screenerRows: document.querySelector("#screenerRows"),
+  monteSummary: document.querySelector("#monteSummary"),
+  monteTrials: document.querySelector("#monteTrials"),
+  monteNoise: document.querySelector("#monteNoise"),
+  monteNoiseValue: document.querySelector("#monteNoiseValue"),
+  monteReseed: document.querySelector("#monteReseed"),
+  monteMedian: document.querySelector("#monteMedian"),
+  monteMean: document.querySelector("#monteMean"),
+  monteP5: document.querySelector("#monteP5"),
+  monteP95: document.querySelector("#monteP95"),
+  monteWinRate: document.querySelector("#monteWinRate"),
+  monteWorst: document.querySelector("#monteWorst"),
+  monteHistogram: document.querySelector("#monteHistogram"),
+  monteNarrative: document.querySelector("#monteNarrative"),
   ticketTitle: document.querySelector("#ticketTitle"),
   ticketStatus: document.querySelector("#ticketStatus"),
   planRiskBudget: document.querySelector("#planRiskBudget"),
@@ -971,6 +989,7 @@ function getSerializableState() {
     themeCapInput: elements.themeCapInput.value,
     plotAxes: { ...state.plotAxes },
     screenerSort: { ...state.screenerSort },
+    monte: { ...state.monte },
   };
 }
 
@@ -1223,6 +1242,16 @@ function applySavedState(saved) {
 
   elements.confidenceFilter.value = state.filters.confidence;
   elements.horizonFilter.value = state.filters.horizon;
+
+  if (saved.monte && typeof saved.monte === "object") {
+    state.monte.trials = clamp(Number(saved.monte.trials) || state.monte.trials, 100, 20000);
+    state.monte.noisePct = clamp(Number(saved.monte.noisePct) || state.monte.noisePct, 10, 400);
+    if (Number.isFinite(saved.monte.seed)) {
+      state.monte.seed = (Number(saved.monte.seed) >>> 0) || state.monte.seed;
+    }
+  }
+  elements.monteTrials.value = String(state.monte.trials);
+  elements.monteNoise.value = String(state.monte.noisePct);
 }
 
 function hydrateState() {
@@ -1682,6 +1711,282 @@ function renderScenarioStudio() {
     .join("");
 }
 
+function createSeededRng(seed) {
+  let cursor = (seed >>> 0) || 1;
+  return function next() {
+    cursor = (cursor + 0x6d2b79f5) >>> 0;
+    let t = cursor;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function sampleNormal(rng) {
+  let u = 0;
+  let v = 0;
+  while (u === 0) u = rng();
+  while (v === 0) v = rng();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+function getMonteInputs() {
+  const trials = clamp(Number(elements.monteTrials.value) || 2000, 100, 20000);
+  const noisePct = clamp(Number(elements.monteNoise.value) || 80, 10, 400) / 100;
+  return { trials, noisePct };
+}
+
+function getMonteRows() {
+  const selectedFiltered = getSelectedFilteredIndices();
+  if (!selectedFiltered.length) {
+    return [];
+  }
+  return getPortfolioRows(selectedFiltered).map((row) => {
+    const scenario = getPairScenarioMetrics(row.index);
+    return {
+      ...row,
+      breakRisk: scenario.breakRisk,
+      confidencePenalty: scenario.confidencePenalty,
+      stressScore: scenario.stressScore,
+    };
+  });
+}
+
+function simulateBookOutcomes(rows, trials, noisePct, seed) {
+  const rng = createSeededRng(seed);
+  const outcomes = new Array(trials);
+  let breakHits = 0;
+  let bookBreaks = 0;
+
+  for (let trial = 0; trial < trials; trial += 1) {
+    let bookPnL = 0;
+    let trialBreaks = 0;
+
+    for (const row of rows) {
+      const breakRoll = rng();
+      if (breakRoll < row.breakRisk) {
+        const stopShare = 0.7 + rng() * 0.3;
+        bookPnL -= row.riskBudget * stopShare;
+        breakHits += 1;
+        trialBreaks += 1;
+        continue;
+      }
+
+      const sigmaScale = noisePct * (0.6 + row.confidencePenalty * 1.6);
+      const meanPnL = row.expectedPnL;
+      const sigma = Math.max(Math.abs(meanPnL) * sigmaScale, row.riskBudget * 0.25);
+      const draw = meanPnL + sampleNormal(rng) * sigma;
+      const floor = -row.riskBudget * 1.1;
+      bookPnL += Math.max(draw, floor);
+    }
+
+    if (trialBreaks > 0) {
+      bookBreaks += 1;
+    }
+    outcomes[trial] = bookPnL;
+  }
+
+  return { outcomes, breakHits, bookBreaks };
+}
+
+function quantile(sorted, q) {
+  if (!sorted.length) return 0;
+  const pos = (sorted.length - 1) * q;
+  const base = Math.floor(pos);
+  const rest = pos - base;
+  const next = sorted[Math.min(base + 1, sorted.length - 1)];
+  return sorted[base] + rest * (next - sorted[base]);
+}
+
+function summarizeOutcomes(outcomes) {
+  if (!outcomes.length) {
+    return null;
+  }
+  const sorted = outcomes.slice().sort((a, b) => a - b);
+  const sum = outcomes.reduce((acc, value) => acc + value, 0);
+  const wins = outcomes.reduce((acc, value) => acc + (value > 0 ? 1 : 0), 0);
+  return {
+    sorted,
+    mean: sum / outcomes.length,
+    median: quantile(sorted, 0.5),
+    p05: quantile(sorted, 0.05),
+    p95: quantile(sorted, 0.95),
+    worst: sorted[0],
+    best: sorted[sorted.length - 1],
+    winRate: wins / outcomes.length,
+  };
+}
+
+function buildHistogramBins(sorted, binCount) {
+  const min = sorted[0];
+  const max = sorted[sorted.length - 1];
+  if (min === max) {
+    return [{ start: min, end: max + 1, count: sorted.length }];
+  }
+
+  const span = max - min;
+  const padded = span * 0.04;
+  const lo = min - padded;
+  const hi = max + padded;
+  const width = (hi - lo) / binCount;
+  const bins = Array.from({ length: binCount }, (_, index) => ({
+    start: lo + index * width,
+    end: lo + (index + 1) * width,
+    count: 0,
+  }));
+
+  for (const value of sorted) {
+    const offset = Math.min(binCount - 1, Math.max(0, Math.floor((value - lo) / width)));
+    bins[offset].count += 1;
+  }
+  return bins;
+}
+
+function renderMonteCarlo() {
+  const rows = getMonteRows();
+  if (!rows.length) {
+    elements.monteSummary.textContent = "No live book to simulate";
+    elements.monteMedian.textContent = "-";
+    elements.monteMean.textContent = "-";
+    elements.monteP5.textContent = "-";
+    elements.monteP95.textContent = "-";
+    elements.monteWinRate.textContent = "-";
+    elements.monteWorst.textContent = "-";
+    elements.monteHistogram.innerHTML = "";
+    elements.monteNarrative.textContent =
+      "Add at least one pair to the book to run the Monte Carlo distribution.";
+    elements.monteNoiseValue.textContent = `${Math.round(getMonteInputs().noisePct * 100)}%`;
+    return;
+  }
+
+  const { trials, noisePct } = getMonteInputs();
+  elements.monteNoiseValue.textContent = `${Math.round(noisePct * 100)}%`;
+
+  const seed = state.monte.seed ^ rows.length ^ Math.round(noisePct * 1000) ^ trials;
+  const { outcomes, bookBreaks } = simulateBookOutcomes(rows, trials, noisePct, seed);
+  const summary = summarizeOutcomes(outcomes);
+  if (!summary) {
+    return;
+  }
+
+  elements.monteMedian.textContent = formatSignedMoney(summary.median);
+  elements.monteMean.textContent = formatSignedMoney(summary.mean);
+  elements.monteP5.textContent = formatSignedMoney(summary.p05);
+  elements.monteP95.textContent = formatSignedMoney(summary.p95);
+  elements.monteWinRate.textContent = formatPercent(summary.winRate, 0);
+  elements.monteWorst.textContent = formatSignedMoney(summary.worst);
+
+  const breakRate = bookBreaks / trials;
+  elements.monteSummary.textContent = `${formatCount(trials)} simulated paths · ${formatPercent(
+    breakRate,
+    0
+  )} of trials hit at least one stop`;
+
+  elements.monteNarrative.textContent = buildMonteNarrative(summary, breakRate, rows.length);
+  elements.monteHistogram.innerHTML = drawMonteHistogram(summary, outcomes.length);
+}
+
+function buildMonteNarrative(summary, breakRate, pairCount) {
+  const skew =
+    summary.mean - summary.median > Math.abs(summary.median) * 0.1
+      ? "right-skewed (a few big winners pull the mean above the median)"
+      : summary.median - summary.mean > Math.abs(summary.median) * 0.1
+        ? "left-skewed (a thick downside tail pulls the mean below the median)"
+        : "roughly symmetric";
+  const downsideHint =
+    summary.p05 < 0
+      ? `a one-in-twenty path loses ${formatMoney(Math.abs(summary.p05))} or more`
+      : `even the bottom 5% of paths stay above ${formatMoney(summary.p05)}`;
+  return `Across the ${pairCount}-pair live book, the outcome distribution is ${skew}. The middle path lands at ${formatSignedMoney(
+    summary.median
+  )} and the upper 5% reaches ${formatSignedMoney(summary.p95)}. On the downside, ${downsideHint}, while ${formatPercent(
+    breakRate,
+    0
+  )} of simulated trials see at least one pair stopped out.`;
+}
+
+function drawMonteHistogram(summary, sampleCount) {
+  const frame = { left: 80, right: 880, top: 32, bottom: 320 };
+  const plotWidth = frame.right - frame.left;
+  const plotHeight = frame.bottom - frame.top;
+  const binCount = clamp(Math.round(Math.sqrt(sampleCount) * 0.9), 18, 48);
+  const bins = buildHistogramBins(summary.sorted, binCount);
+  const maxCount = bins.reduce((max, bin) => Math.max(max, bin.count), 1);
+  const lo = bins[0].start;
+  const hi = bins[bins.length - 1].end;
+  const mapX = (value) => frame.left + ((value - lo) / Math.max(hi - lo, 0.0001)) * plotWidth;
+  const xTicks = buildTicks(lo, hi, 6);
+
+  const barGap = 2;
+  const bars = bins
+    .map((bin) => {
+      const barX = mapX(bin.start);
+      const nextX = mapX(bin.end);
+      const width = Math.max(nextX - barX - barGap, 1);
+      const height = (bin.count / maxCount) * plotHeight;
+      const y = frame.bottom - height;
+      const center = (bin.start + bin.end) / 2;
+      const tone = center >= 0 ? "var(--up)" : "var(--down)";
+      return `<rect x="${barX}" y="${y}" width="${width}" height="${height}" fill="${tone}" opacity="0.78" rx="3"></rect>`;
+    })
+    .join("");
+
+  const zeroX = lo <= 0 && hi >= 0 ? mapX(0) : null;
+  const markers = [
+    { value: summary.p05, label: "P5", color: "var(--down)" },
+    { value: summary.median, label: "Median", color: "var(--ink)" },
+    { value: summary.p95, label: "P95", color: "var(--up)" },
+  ]
+    .map((marker) => {
+      const x = mapX(marker.value);
+      return `
+        <g class="monte-marker">
+          <line x1="${x}" y1="${frame.top - 6}" x2="${x}" y2="${frame.bottom}" stroke="${marker.color}" stroke-width="1.5" stroke-dasharray="4 4"></line>
+          <text x="${x}" y="${frame.top - 10}" class="monte-marker-label" fill="${marker.color}">${marker.label} ${formatSignedMoney(marker.value)}</text>
+        </g>
+      `;
+    })
+    .join("");
+
+  const xTickMarks = xTicks
+    .map((tick) => {
+      const x = mapX(tick);
+      return `
+        <g>
+          <line x1="${x}" y1="${frame.bottom}" x2="${x}" y2="${frame.bottom + 4}" class="plot-axis"></line>
+          <text x="${x}" y="${frame.bottom + 18}" class="plot-tick">${escapeHtml(formatSignedMoney(tick))}</text>
+        </g>
+      `;
+    })
+    .join("");
+
+  const yTicks = buildTicks(0, maxCount, 4);
+  const yTickMarks = yTicks
+    .map((tick) => {
+      const y = frame.bottom - (tick / Math.max(maxCount, 1)) * plotHeight;
+      return `
+        <g>
+          <line x1="${frame.left - 4}" y1="${y}" x2="${frame.right}" y2="${y}" class="plot-grid-line"></line>
+          <text x="${frame.left - 10}" y="${y + 4}" class="plot-tick plot-tick-left">${formatCount(Math.round(tick))}</text>
+        </g>
+      `;
+    })
+    .join("");
+
+  return `
+    <rect x="${frame.left}" y="${frame.top}" width="${plotWidth}" height="${plotHeight}" rx="20" class="plot-panel"></rect>
+    ${yTickMarks}
+    ${zeroX !== null ? `<line x1="${zeroX}" y1="${frame.top}" x2="${zeroX}" y2="${frame.bottom}" class="monte-zero"></line>` : ""}
+    ${bars}
+    ${markers}
+    <line x1="${frame.left}" y1="${frame.bottom}" x2="${frame.right}" y2="${frame.bottom}" class="plot-axis"></line>
+    <line x1="${frame.left}" y1="${frame.top}" x2="${frame.left}" y2="${frame.bottom}" class="plot-axis"></line>
+    ${xTickMarks}
+    <text x="${(frame.left + frame.right) / 2}" y="${frame.bottom + 44}" class="plot-axis-label">Book P/L (USD)</text>
+    <text x="28" y="${(frame.top + frame.bottom) / 2}" class="plot-axis-label plot-axis-label-vertical">Trial count</text>
+  `;
+}
+
 function renderScreener() {
   const filtered = getFilteredIndices();
   const rows = getScreenedRows(filtered);
@@ -1830,6 +2135,7 @@ function renderAll() {
   renderBuilder();
   renderCrossSectionPlot();
   renderExecutionPlanner();
+  renderMonteCarlo();
   renderScreener();
   persistState();
   syncSnapshotUrl();
@@ -1905,6 +2211,21 @@ document.querySelectorAll(".sort-button").forEach((button) => {
     toggleScreenerSort(button.dataset.sortKey);
     renderAll();
   });
+});
+
+elements.monteTrials.addEventListener("change", () => {
+  state.monte.trials = clamp(Number(elements.monteTrials.value) || 2000, 100, 20000);
+  renderAll();
+});
+
+elements.monteNoise.addEventListener("input", () => {
+  state.monte.noisePct = clamp(Number(elements.monteNoise.value) || 80, 10, 400);
+  renderAll();
+});
+
+elements.monteReseed.addEventListener("click", () => {
+  state.monte.seed = (Math.floor(Math.random() * 2 ** 31) >>> 0) || 1;
+  renderAll();
 });
 
 renderAll();

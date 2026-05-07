@@ -485,6 +485,66 @@
         </div>
       </section>
 
+      <section class="portfolio-card monte-card">
+        <div class="portfolio-head">
+          <div>
+            <p class="section-label">Monte Carlo Lab</p>
+            <h3>Distribution of book outcomes</h3>
+          </div>
+          <p id="monteSummary" class="screener-summary"></p>
+        </div>
+        <div class="plot-toolbar monte-toolbar">
+          <label class="field">
+            <span>Trials</span>
+            <select id="monteTrials">
+              <option value="500">500</option>
+              <option value="2000" selected>2,000</option>
+              <option value="5000">5,000</option>
+              <option value="10000">10,000</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Noise scale (% of mean)</span>
+            <input id="monteNoise" type="range" min="20" max="200" step="5" value="80" />
+            <small id="monteNoiseValue" class="field-note"></small>
+          </label>
+          <label class="field monte-reseed">
+            <span>Random draw</span>
+            <button id="monteReseed" class="toggle-button" type="button">Reshuffle paths</button>
+          </label>
+        </div>
+        <div class="monte-stats">
+          <div>
+            <span>Median P/L</span>
+            <strong id="monteMedian"></strong>
+          </div>
+          <div>
+            <span>Mean P/L</span>
+            <strong id="monteMean"></strong>
+          </div>
+          <div>
+            <span>5th percentile</span>
+            <strong id="monteP5"></strong>
+          </div>
+          <div>
+            <span>95th percentile</span>
+            <strong id="monteP95"></strong>
+          </div>
+          <div>
+            <span>Win rate</span>
+            <strong id="monteWinRate"></strong>
+          </div>
+          <div>
+            <span>Worst trial</span>
+            <strong id="monteWorst"></strong>
+          </div>
+        </div>
+        <div class="plot-frame">
+          <svg id="monteHistogram" class="cross-section-plot" viewBox="0 0 920 420" role="img" aria-label="Monte Carlo P/L distribution"></svg>
+        </div>
+        <p id="monteNarrative" class="shock-narrative"></p>
+      </section>
+
       <section class="portfolio-card">
         <div class="portfolio-head">
           <div>

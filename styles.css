@@ -989,6 +989,69 @@ th {
   fill: var(--muted);
 }
 
+.monte-card {
+  padding: 22px;
+}
+
+.monte-toolbar {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.monte-reseed {
+  align-self: end;
+}
+
+.monte-reseed .toggle-button {
+  width: 100%;
+  padding: 10px 14px;
+}
+
+.monte-stats {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(255, 253, 248, 0.8);
+  border: 1px solid var(--line);
+}
+
+.monte-stats > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.monte-stats span {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+
+.monte-stats strong {
+  font-size: 1rem;
+  color: var(--ink);
+}
+
+.monte-marker-label {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
+  text-anchor: middle;
+}
+
+.monte-zero {
+  stroke: rgba(24, 21, 17, 0.4);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+}
+
+#monteNarrative {
+  margin-top: 14px;
+}
+
 @media (max-width: 900px) {
   .config-grid,
   .scenario-summary,
@@ -1005,7 +1068,9 @@ th {
   .scenario-metrics,
   .concentration-grid,
   .builder-grid,
-  .plot-toolbar {
+  .plot-toolbar,
+  .monte-toolbar,
+  .monte-stats {
     grid-template-columns: 1fr;
   }
 
