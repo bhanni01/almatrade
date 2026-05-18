@@ -200,6 +200,12 @@ const state = {
     noisePct: 80,
     seed: 1337,
   },
+  backtest: {
+    history: 252,
+    lookback: 20,
+    entryZ: 2,
+    exitZ: 0.5,
+  },
 };
 
 const elements = {
