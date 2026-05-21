@@ -2157,6 +2157,38 @@ function getBacktestInputs() {
   return { history, lookback, entryZ, exitZ };
 }
 
+function buildPairPriceHistory(index, history) {
+  const signal = PAIR_SIGNALS[index];
+  const baseA = parseDollar(signal.stockA.entryPrice) || 100;
+  const baseB = parseDollar(signal.stockB.entryPrice) || 100;
+  // Confidence shapes how cleanly the synthetic spread mean-reverts.
+  const conviction = CONFIDENCE_SCORE[signal.confidence] || 2;
+  const phi = 0.9 + conviction * 0.015; // stickier reversion for higher-confidence pairs
+  const spreadAmplitude = 0.07 - conviction * 0.008; // tighter pairs swing a touch less in log terms
+  const driftVol = 0.009;
+  const spreadSigma = 0.392; // keeps the OU stationary std near 1.0 at this phi range
+  const seed = (((index + 1) * 2654435761) ^ (history * 40503) ^ 0x9e3779b9) >>> 0;
+  const rng = createSeededRng(seed);
+
+  const sessions = [];
+  let ouState = sampleNormal(rng);
+  let commonLog = 0;
+  for (let t = 0; t < history; t += 1) {
+    ouState = phi * ouState + sampleNormal(rng) * spreadSigma;
+    commonLog += driftVol * sampleNormal(rng) + 0.0002; // gentle shared drift
+    const logA = commonLog + 0.5 * ouState * spreadAmplitude;
+    const logB = commonLog - 0.5 * ouState * spreadAmplitude;
+    sessions.push({
+      t,
+      spreadUnit: ouState,
+      logSpread: logA - logB,
+      priceA: baseA * Math.exp(logA),
+      priceB: baseB * Math.exp(logB),
+    });
+  }
+  return { signal, sessions };
+}
+
 function renderAll() {
   renderTabs();
   renderScenarioStudio();
