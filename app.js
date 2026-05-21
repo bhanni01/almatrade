@@ -2146,6 +2146,17 @@ function renderExecutionPlanner() {
   elements.planChecklist.innerHTML = plan.checklist.map((item) => `<li>${item}</li>`).join("");
 }
 
+function getBacktestInputs() {
+  const history = clamp(Math.round(Number(elements.btHistory.value) || 252), 120, 756);
+  const lookback = clamp(Math.round(Number(elements.btLookback.value) || 20), 10, 90);
+  const entryZ = clamp(Number(elements.btEntryZ.value) || 2, 1, 3.5);
+  let exitZ = clamp(Number(elements.btExitZ.value) || 0.5, 0, 2);
+  if (exitZ >= entryZ) {
+    exitZ = Math.max(0, entryZ - 0.5);
+  }
+  return { history, lookback, entryZ, exitZ };
+}
+
 function renderAll() {
   renderTabs();
   renderScenarioStudio();
