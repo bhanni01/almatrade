@@ -2189,6 +2189,42 @@ function buildPairPriceHistory(index, history) {
   return { signal, sessions };
 }
 
+function summarizeBacktest(points, trades) {
+  const equity = points.map((point) => point.equity);
+  const totalReturn = equity.length ? equity[equity.length - 1] - 1 : 0;
+
+  let peak = -Infinity;
+  let maxDrawdown = 0;
+  for (const value of equity) {
+    peak = Math.max(peak, value);
+    if (peak > 0) {
+      maxDrawdown = Math.max(maxDrawdown, (peak - value) / peak);
+    }
+  }
+
+  const returns = [];
+  for (let i = 1; i < equity.length; i += 1) {
+    if (equity[i - 1] > 0) {
+      returns.push(equity[i] / equity[i - 1] - 1);
+    }
+  }
+  const meanR = returns.length ? returns.reduce((sum, value) => sum + value, 0) / returns.length : 0;
+  const varR = returns.length
+    ? returns.reduce((sum, value) => sum + (value - meanR) ** 2, 0) / returns.length
+    : 0;
+  const sharpe = varR > 0 ? (meanR / Math.sqrt(varR)) * Math.sqrt(252) : 0;
+
+  const wins = trades.filter((trade) => trade.ret > 0);
+  const losses = trades.filter((trade) => trade.ret < 0);
+  const grossWin = wins.reduce((sum, trade) => sum + trade.ret, 0);
+  const grossLoss = Math.abs(losses.reduce((sum, trade) => sum + trade.ret, 0));
+  const profitFactor = grossLoss > 0 ? grossWin / grossLoss : grossWin > 0 ? Infinity : 0;
+  const winRate = trades.length ? wins.length / trades.length : 0;
+  const avgHold = trades.length ? trades.reduce((sum, trade) => sum + trade.hold, 0) / trades.length : 0;
+
+  return { totalReturn, maxDrawdown, sharpe, profitFactor, winRate, avgHold };
+}
+
 function renderAll() {
   renderTabs();
   renderScenarioStudio();
