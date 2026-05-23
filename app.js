@@ -2225,6 +2225,76 @@ function summarizeBacktest(points, trades) {
   return { totalReturn, maxDrawdown, sharpe, profitFactor, winRate, avgHold };
 }
 
+function computeBacktest() {
+  const inputs = getBacktestInputs();
+  const { signal, sessions } = buildPairPriceHistory(state.activeIndex, inputs.history);
+
+  const points = [];
+  const entries = [];
+  const trades = [];
+  let position = 0; // +1 long the spread, -1 short the spread
+  let entrySpread = 0;
+  let entryT = 0;
+  let realized = 1; // equity index multiplier, starts at 1.0 (chart shows x100)
+  const stopZ = inputs.entryZ * 1.8;
+
+  for (let t = 0; t < sessions.length; t += 1) {
+    let z = 0;
+    if (t >= inputs.lookback) {
+      let sum = 0;
+      for (let k = t - inputs.lookback; k < t; k += 1) {
+        sum += sessions[k].spreadUnit;
+      }
+      const mean = sum / inputs.lookback;
+      let varSum = 0;
+      for (let k = t - inputs.lookback; k < t; k += 1) {
+        const delta = sessions[k].spreadUnit - mean;
+        varSum += delta * delta;
+      }
+      const std = Math.sqrt(varSum / inputs.lookback) || 1e-6;
+      z = (sessions[t].spreadUnit - mean) / std;
+    }
+
+    // Close an open position once the spread reverts back through the exit band
+    // (a profit-taking exit) or runs further against us past the stop band.
+    if (position !== 0) {
+      const reverted = position === 1 ? z >= -inputs.exitZ : z <= inputs.exitZ;
+      const stopped = position === 1 ? z <= -stopZ : z >= stopZ;
+      if (reverted || stopped) {
+        const ret = position * (sessions[t].logSpread - entrySpread);
+        realized *= 1 + ret;
+        trades.push({
+          ret,
+          hold: t - entryT,
+          side: position === 1 ? "Long spread" : "Short spread",
+          stopped,
+        });
+        position = 0;
+      }
+    }
+
+    // Open a fresh position when a flat book sees the spread stretch past entry.
+    if (position === 0 && t >= inputs.lookback) {
+      if (z >= inputs.entryZ) {
+        position = -1;
+        entrySpread = sessions[t].logSpread;
+        entryT = t;
+        entries.push({ t, z, side: -1 });
+      } else if (z <= -inputs.entryZ) {
+        position = 1;
+        entrySpread = sessions[t].logSpread;
+        entryT = t;
+        entries.push({ t, z, side: 1 });
+      }
+    }
+
+    const unrealized = position !== 0 ? position * (sessions[t].logSpread - entrySpread) : 0;
+    points.push({ t, z, equity: realized * (1 + unrealized), position });
+  }
+
+  return { signal, inputs, points, entries, trades, metrics: summarizeBacktest(points, trades) };
+}
+
 function renderAll() {
   renderTabs();
   renderScenarioStudio();
