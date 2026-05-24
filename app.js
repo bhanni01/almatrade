@@ -2295,6 +2295,73 @@ function computeBacktest() {
   return { signal, inputs, points, entries, trades, metrics: summarizeBacktest(points, trades) };
 }
 
+function drawZScoreChart(points, entries, entryZ, exitZ) {
+  const frame = { left: 64, right: 892, top: 28, bottom: 300 };
+  const plotWidth = frame.right - frame.left;
+  const plotHeight = frame.bottom - frame.top;
+  const count = points.length;
+  const maxAbs = points.reduce((max, point) => Math.max(max, Math.abs(point.z)), entryZ * 1.4);
+  const yMax = Math.max(Math.ceil(maxAbs * 2) / 2, entryZ + 0.5, 3);
+  const yMin = -yMax;
+  const mapX = (t) => frame.left + (count <= 1 ? 0 : (t / (count - 1)) * plotWidth);
+  const mapY = (z) => frame.bottom - ((z - yMin) / (yMax - yMin)) * plotHeight;
+
+  const band = (hi, lo, cls) =>
+    `<rect x="${frame.left}" y="${mapY(hi).toFixed(1)}" width="${plotWidth}" height="${(mapY(lo) - mapY(hi)).toFixed(1)}" class="${cls}"></rect>`;
+  const bands =
+    band(yMax, entryZ, "bt-band-entry") +
+    band(-entryZ, yMin, "bt-band-entry") +
+    band(exitZ, -exitZ, "bt-band-exit");
+
+  const thresholds =
+    [entryZ, -entryZ]
+      .map((z) => `<line x1="${frame.left}" y1="${mapY(z).toFixed(1)}" x2="${frame.right}" y2="${mapY(z).toFixed(1)}" class="bt-threshold"></line>`)
+      .join("") +
+    [exitZ, -exitZ]
+      .map((z) => `<line x1="${frame.left}" y1="${mapY(z).toFixed(1)}" x2="${frame.right}" y2="${mapY(z).toFixed(1)}" class="bt-threshold-soft"></line>`)
+      .join("") +
+    `<line x1="${frame.left}" y1="${mapY(0).toFixed(1)}" x2="${frame.right}" y2="${mapY(0).toFixed(1)}" class="plot-axis"></line>`;
+
+  const linePath = points
+    .map((point, index) => `${index === 0 ? "M" : "L"} ${mapX(point.t).toFixed(1)} ${mapY(clamp(point.z, yMin, yMax)).toFixed(1)}`)
+    .join(" ");
+  const zLine = `<path d="${linePath}" class="bt-zline"></path>`;
+
+  const markers = entries
+    .map((entry) => {
+      const tone = entry.side === 1 ? "var(--up)" : "var(--down)";
+      return `<circle cx="${mapX(entry.t).toFixed(1)}" cy="${mapY(clamp(entry.z, yMin, yMax)).toFixed(1)}" r="3.4" fill="${tone}" stroke="var(--surface)" stroke-width="1"></circle>`;
+    })
+    .join("");
+
+  const yTicks = buildTicks(yMin, yMax, 5)
+    .map(
+      (z) =>
+        `<g><line x1="${frame.left - 4}" y1="${mapY(z).toFixed(1)}" x2="${frame.right}" y2="${mapY(z).toFixed(1)}" class="plot-grid-line"></line><text x="${frame.left - 10}" y="${(mapY(z) + 4).toFixed(1)}" class="plot-tick plot-tick-left">${z.toFixed(1)}</text></g>`
+    )
+    .join("");
+  const xTicks = buildTicks(0, Math.max(count - 1, 1), 6)
+    .map((t) => {
+      const x = mapX(t);
+      return `<g><line x1="${x.toFixed(1)}" y1="${frame.bottom}" x2="${x.toFixed(1)}" y2="${frame.bottom + 4}" class="plot-axis"></line><text x="${x.toFixed(1)}" y="${frame.bottom + 18}" class="plot-tick">${Math.round(t)}</text></g>`;
+    })
+    .join("");
+
+  return `
+    <rect x="${frame.left}" y="${frame.top}" width="${plotWidth}" height="${plotHeight}" rx="18" class="plot-panel"></rect>
+    ${bands}
+    ${yTicks}
+    ${thresholds}
+    ${zLine}
+    ${markers}
+    <line x1="${frame.left}" y1="${frame.bottom}" x2="${frame.right}" y2="${frame.bottom}" class="plot-axis"></line>
+    <line x1="${frame.left}" y1="${frame.top}" x2="${frame.left}" y2="${frame.bottom}" class="plot-axis"></line>
+    ${xTicks}
+    <text x="${(frame.left + frame.right) / 2}" y="${frame.bottom + 40}" class="plot-axis-label">Trading session</text>
+    <text x="22" y="${(frame.top + frame.bottom) / 2}" class="plot-axis-label plot-axis-label-vertical">Spread z-score</text>
+  `;
+}
+
 function renderAll() {
   renderTabs();
   renderScenarioStudio();
