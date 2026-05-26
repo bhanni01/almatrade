@@ -2362,6 +2362,54 @@ function drawZScoreChart(points, entries, entryZ, exitZ) {
   `;
 }
 
+function drawEquityChart(points) {
+  const frame = { left: 64, right: 892, top: 28, bottom: 250 };
+  const plotWidth = frame.right - frame.left;
+  const plotHeight = frame.bottom - frame.top;
+  const count = points.length;
+  const equity = points.map((point) => point.equity);
+  const lo = Math.min(1, ...equity);
+  const hi = Math.max(1, ...equity);
+  const pad = Math.max((hi - lo) * 0.08, 0.005);
+  const padLo = lo - pad;
+  const padHi = hi + pad;
+  const mapX = (t) => frame.left + (count <= 1 ? 0 : (t / (count - 1)) * plotWidth);
+  const mapY = (value) => frame.bottom - ((value - padLo) / (padHi - padLo)) * plotHeight;
+
+  const linePath = points
+    .map((point, index) => `${index === 0 ? "M" : "L"} ${mapX(point.t).toFixed(1)} ${mapY(point.equity).toFixed(1)}`)
+    .join(" ");
+  const areaPath = `${linePath} L ${mapX(count - 1).toFixed(1)} ${mapY(padLo).toFixed(1)} L ${mapX(0).toFixed(1)} ${mapY(padLo).toFixed(1)} Z`;
+  const finishedUp = equity[equity.length - 1] >= 1;
+  const tone = finishedUp ? "is-up" : "is-down";
+
+  const yTicks = buildTicks(padLo, padHi, 5)
+    .map(
+      (value) =>
+        `<g><line x1="${frame.left - 4}" y1="${mapY(value).toFixed(1)}" x2="${frame.right}" y2="${mapY(value).toFixed(1)}" class="plot-grid-line"></line><text x="${frame.left - 10}" y="${(mapY(value) + 4).toFixed(1)}" class="plot-tick plot-tick-left">${(value * 100).toFixed(0)}</text></g>`
+    )
+    .join("");
+  const xTicks = buildTicks(0, Math.max(count - 1, 1), 6)
+    .map((t) => {
+      const x = mapX(t);
+      return `<g><line x1="${x.toFixed(1)}" y1="${frame.bottom}" x2="${x.toFixed(1)}" y2="${frame.bottom + 4}" class="plot-axis"></line><text x="${x.toFixed(1)}" y="${frame.bottom + 18}" class="plot-tick">${Math.round(t)}</text></g>`;
+    })
+    .join("");
+
+  return `
+    <rect x="${frame.left}" y="${frame.top}" width="${plotWidth}" height="${plotHeight}" rx="18" class="plot-panel"></rect>
+    ${yTicks}
+    <line x1="${frame.left}" y1="${mapY(1).toFixed(1)}" x2="${frame.right}" y2="${mapY(1).toFixed(1)}" class="bt-threshold-soft"></line>
+    <path d="${areaPath}" class="bt-equity-area ${tone}"></path>
+    <path d="${linePath}" class="bt-equity-line ${tone}"></path>
+    <line x1="${frame.left}" y1="${frame.bottom}" x2="${frame.right}" y2="${frame.bottom}" class="plot-axis"></line>
+    <line x1="${frame.left}" y1="${frame.top}" x2="${frame.left}" y2="${frame.bottom}" class="plot-axis"></line>
+    ${xTicks}
+    <text x="${(frame.left + frame.right) / 2}" y="${frame.bottom + 40}" class="plot-axis-label">Trading session</text>
+    <text x="22" y="${(frame.top + frame.bottom) / 2}" class="plot-axis-label plot-axis-label-vertical">Equity index (start 100)</text>
+  `;
+}
+
 function renderAll() {
   renderTabs();
   renderScenarioStudio();
