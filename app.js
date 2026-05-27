@@ -1012,6 +1012,7 @@ function getSerializableState() {
     plotAxes: { ...state.plotAxes },
     screenerSort: { ...state.screenerSort },
     monte: { ...state.monte },
+    backtest: { ...state.backtest },
   };
 }
 
@@ -1274,6 +1275,17 @@ function applySavedState(saved) {
   }
   elements.monteTrials.value = String(state.monte.trials);
   elements.monteNoise.value = String(state.monte.noisePct);
+
+  if (saved.backtest && typeof saved.backtest === "object") {
+    state.backtest.history = clamp(Math.round(Number(saved.backtest.history) || state.backtest.history), 120, 756);
+    state.backtest.lookback = clamp(Math.round(Number(saved.backtest.lookback) || state.backtest.lookback), 10, 90);
+    state.backtest.entryZ = clamp(Number(saved.backtest.entryZ) || state.backtest.entryZ, 1, 3.5);
+    state.backtest.exitZ = clamp(Number(saved.backtest.exitZ) || state.backtest.exitZ, 0, 2);
+  }
+  elements.btHistory.value = String(state.backtest.history);
+  elements.btLookback.value = String(state.backtest.lookback);
+  elements.btEntryZ.value = String(state.backtest.entryZ);
+  elements.btExitZ.value = String(state.backtest.exitZ);
 }
 
 function hydrateState() {
@@ -2410,6 +2422,58 @@ function drawEquityChart(points) {
   `;
 }
 
+function buildBacktestNarrative(signal, metrics, trades, inputs) {
+  const pairLabel = `${signal.pair[0]} / ${signal.pair[1]}`;
+  if (!trades.length) {
+    return `Over ${inputs.history} synthetic sessions the ${pairLabel} spread never stretched past ${inputs.entryZ.toFixed(
+      1
+    )}σ on a ${inputs.lookback}-session lookback, so the rule stayed flat. Loosen the entry threshold or shorten the lookback to surface trades.`;
+  }
+  const verdict =
+    metrics.totalReturn >= 0
+      ? `compounded to +${formatPercent(metrics.totalReturn, 1)}`
+      : `bled -${formatPercent(Math.abs(metrics.totalReturn), 1)}`;
+  const edge =
+    metrics.winRate >= 0.5
+      ? "The reversion edge held up"
+      : "Reversion misfired more often than not";
+  return `Trading the spread on a ${inputs.entryZ.toFixed(1)}σ entry / ${inputs.exitZ.toFixed(
+    1
+  )}σ exit rule, ${pairLabel} took ${formatCount(trades.length)} round trips over ${inputs.history} sessions and ${verdict} (start 100). ${edge} at a ${formatPercent(
+    metrics.winRate,
+    0
+  )} hit rate, the worst peak-to-trough dip was ${formatPercent(
+    metrics.maxDrawdown,
+    1
+  )}, and the realized Sharpe landed near ${metrics.sharpe.toFixed(
+    2
+  )}. The price path is a deterministic synthetic series seeded from the pair, so this is a behavior sketch of the rule, not a historical claim.`;
+}
+
+function renderBacktest() {
+  const { signal, inputs, points, entries, trades, metrics } = computeBacktest();
+
+  elements.btEntryZValue.textContent = `${inputs.entryZ.toFixed(1)}σ`;
+  elements.btExitZValue.textContent = `${inputs.exitZ.toFixed(1)}σ`;
+  elements.backtestSummary.textContent = `${signal.pair[0]} / ${signal.pair[1]} · ${inputs.history} sessions · ${inputs.lookback}-session lookback`;
+
+  elements.btTotalReturn.textContent = `${metrics.totalReturn >= 0 ? "+" : "-"}${formatPercent(Math.abs(metrics.totalReturn), 1)}`;
+  elements.btTotalReturn.style.color = metrics.totalReturn >= 0 ? "var(--up)" : "var(--down)";
+  elements.btTrades.textContent = formatCount(trades.length);
+  elements.btWinRate.textContent = trades.length ? formatPercent(metrics.winRate, 0) : "-";
+  elements.btProfitFactor.textContent = trades.length
+    ? Number.isFinite(metrics.profitFactor)
+      ? metrics.profitFactor.toFixed(2)
+      : "∞"
+    : "-";
+  elements.btMaxDD.textContent = formatPercent(metrics.maxDrawdown, 1);
+  elements.btSharpe.textContent = metrics.sharpe.toFixed(2);
+
+  elements.btZChart.innerHTML = drawZScoreChart(points, entries, inputs.entryZ, inputs.exitZ);
+  elements.btEquityChart.innerHTML = drawEquityChart(points);
+  elements.backtestNarrative.textContent = buildBacktestNarrative(signal, metrics, trades, inputs);
+}
+
 function renderAll() {
   renderTabs();
   renderScenarioStudio();
@@ -2422,6 +2486,7 @@ function renderAll() {
   renderCrossSectionPlot();
   renderExecutionPlanner();
   renderMonteCarlo();
+  renderBacktest();
   renderScreener();
   persistState();
   syncSnapshotUrl();
@@ -2512,6 +2577,17 @@ elements.monteNoise.addEventListener("input", () => {
 elements.monteReseed.addEventListener("click", () => {
   state.monte.seed = (Math.floor(Math.random() * 2 ** 31) >>> 0) || 1;
   renderAll();
+});
+
+[elements.btHistory, elements.btLookback, elements.btEntryZ, elements.btExitZ].forEach((input) => {
+  input.addEventListener("input", () => {
+    const inputs = getBacktestInputs();
+    state.backtest.history = inputs.history;
+    state.backtest.lookback = inputs.lookback;
+    state.backtest.entryZ = inputs.entryZ;
+    state.backtest.exitZ = inputs.exitZ;
+    renderAll();
+  });
 });
 
 renderAll();
