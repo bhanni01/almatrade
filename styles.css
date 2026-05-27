@@ -1052,6 +1052,123 @@ th {
   margin-top: 14px;
 }
 
+.backtest-toolbar {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+#backtestNarrative {
+  margin-top: 14px;
+}
+
+.backtest-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-top: 18px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.bt-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.bt-legend-item::before {
+  content: "";
+  width: 14px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.bt-legend-zline::before {
+  height: 0;
+  border-top: 2px solid #3b528b;
+}
+
+.bt-legend-entry::before {
+  background: var(--down-soft);
+  border: 1px solid var(--down);
+}
+
+.bt-legend-exit::before {
+  background: var(--up-soft);
+  border: 1px solid var(--up);
+}
+
+.bt-legend-long::before,
+.bt-legend-short::before {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.bt-legend-long::before {
+  background: var(--up);
+}
+
+.bt-legend-short::before {
+  background: var(--down);
+}
+
+.bt-band-entry {
+  fill: var(--down-soft);
+}
+
+.bt-band-exit {
+  fill: var(--up-soft);
+}
+
+.bt-threshold {
+  stroke: var(--down);
+  stroke-width: 1.2;
+  stroke-dasharray: 5 4;
+  opacity: 0.8;
+}
+
+.bt-threshold-soft {
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 2 5;
+  opacity: 0.7;
+}
+
+.bt-zline {
+  fill: none;
+  stroke: #3b528b;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+
+.bt-equity-line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.bt-equity-line.is-up {
+  stroke: var(--up);
+}
+
+.bt-equity-line.is-down {
+  stroke: var(--down);
+}
+
+.bt-equity-area {
+  stroke: none;
+  opacity: 0.16;
+}
+
+.bt-equity-area.is-up {
+  fill: var(--up);
+}
+
+.bt-equity-area.is-down {
+  fill: var(--down);
+}
+
 @media (max-width: 900px) {
   .config-grid,
   .scenario-summary,
@@ -1070,7 +1187,8 @@ th {
   .builder-grid,
   .plot-toolbar,
   .monte-toolbar,
-  .monte-stats {
+  .monte-stats,
+  .backtest-toolbar {
     grid-template-columns: 1fr;
   }
 

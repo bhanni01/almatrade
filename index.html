@@ -545,6 +545,79 @@
         <p id="monteNarrative" class="shock-narrative"></p>
       </section>
 
+      <section class="portfolio-card backtest-card">
+        <div class="portfolio-head">
+          <div>
+            <p class="section-label">Backtest Lab</p>
+            <h3>Z-score mean-reversion on the active pair</h3>
+          </div>
+          <p id="backtestSummary" class="screener-summary"></p>
+        </div>
+
+        <div class="plot-toolbar backtest-toolbar">
+          <label class="field">
+            <span>History (sessions)</span>
+            <input id="btHistory" type="number" min="120" max="756" step="6" value="252" />
+          </label>
+          <label class="field">
+            <span>Lookback window</span>
+            <input id="btLookback" type="number" min="10" max="90" step="1" value="20" />
+          </label>
+          <label class="field">
+            <span>Entry threshold (σ)</span>
+            <input id="btEntryZ" type="range" min="1" max="3.5" step="0.1" value="2" />
+            <small id="btEntryZValue" class="field-note"></small>
+          </label>
+          <label class="field">
+            <span>Exit threshold (σ)</span>
+            <input id="btExitZ" type="range" min="0" max="2" step="0.1" value="0.5" />
+            <small id="btExitZValue" class="field-note"></small>
+          </label>
+        </div>
+
+        <div class="monte-stats backtest-stats">
+          <div>
+            <span>Total return</span>
+            <strong id="btTotalReturn"></strong>
+          </div>
+          <div>
+            <span>Round trips</span>
+            <strong id="btTrades"></strong>
+          </div>
+          <div>
+            <span>Win rate</span>
+            <strong id="btWinRate"></strong>
+          </div>
+          <div>
+            <span>Profit factor</span>
+            <strong id="btProfitFactor"></strong>
+          </div>
+          <div>
+            <span>Max drawdown</span>
+            <strong id="btMaxDD"></strong>
+          </div>
+          <div>
+            <span>Sharpe (ann.)</span>
+            <strong id="btSharpe"></strong>
+          </div>
+        </div>
+
+        <div class="backtest-legend">
+          <span class="bt-legend-item bt-legend-zline">Spread z-score</span>
+          <span class="bt-legend-item bt-legend-entry">Entry band (±σ)</span>
+          <span class="bt-legend-item bt-legend-exit">Exit band (±σ)</span>
+          <span class="bt-legend-item bt-legend-long">Long-spread entry</span>
+          <span class="bt-legend-item bt-legend-short">Short-spread entry</span>
+        </div>
+        <div class="plot-frame">
+          <svg id="btZChart" class="cross-section-plot" viewBox="0 0 920 360" role="img" aria-label="Spread z-score with entry and exit bands"></svg>
+        </div>
+        <div class="plot-frame">
+          <svg id="btEquityChart" class="cross-section-plot" viewBox="0 0 920 310" role="img" aria-label="Backtest equity curve"></svg>
+        </div>
+        <p id="backtestNarrative" class="shock-narrative"></p>
+      </section>
+
       <section class="portfolio-card">
         <div class="portfolio-head">
           <div>
