@@ -12,6 +12,7 @@ This project is now a portfolio-oriented ETF pair strategy viewer.
 - Added shareable snapshot links that recreate the current filters, sizing inputs, active pair, distortion, and selected book from the URL.
 - Added portfolio-level metrics: selected count, deployed risk, expected P/L, and average confidence.
 - Added a regime stress studio with macro presets, intensity control, stressed book ranges, and stress-fit scoring inside the screener.
+- Added a Backtest Lab that runs a z-score mean-reversion rule on the active pair: a deterministic synthetic price path, a rolling spread z-score chart with entry/exit bands and trade markers, an equity curve, and stats (total return, win rate, profit factor, max drawdown, Sharpe).
 - Kept the original pair relationship and distortion engine, and wired distortion into allocation weighting.
 
 ## Run
